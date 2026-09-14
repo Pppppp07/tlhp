@@ -1,0 +1,1210 @@
+/* Palet dan bentuk mengikuti prototipe, supaya aplikasi ini dan prototipenya
+   terbaca sebagai satu benda saat diperagakan berdampingan. */
+
+/* Inter dipasang sendiri, tidak diambil dari fonts.googleapis.com: peladen PDN
+   dan jaringan kantor kerap tidak bisa menjangkau ke luar, dan permintaan ke
+   sana juga membocorkan alamat IP tiap pengguna ke pihak ketiga.
+
+   Font bervariasi — satu berkas mencakup seluruh bobot 400-800, jadi tidak
+   perlu satu berkas per bobot. `swap` supaya teksnya langsung terbaca dengan
+   huruf cadangan sambil fontnya dimuat; halaman yang menahan teks demi font
+   lebih buruk daripada huruf yang berganti sekejap. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('../fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('../fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  /* Palet diturunkan dari prototipe. Nama lama (--paper, --rule, --stamp,
+     --brass, --verm, --slate) sengaja dipertahankan sebagai alias supaya
+     seluruh aturan gaya yang sudah ada ikut berubah tanpa disentuh satu per
+     satu. */
+  --bg:#F7F8FA; --surface:#FFFFFF; --surface-2:#F9FAFB; --surface-3:#F3F4F6;
+  --line:#E5E7EB; --line-2:#F1F3F5;
+  --ink:#111827; --ink-2:#4B5563; --ink-3:#8A94A6;
+
+  --aksen:#2563EB; --aksen-kuat:#1D4ED8; --aksen-bg:#EFF6FF; --aksen-line:#BFDBFE;
+  --ok:#16A34A;   --ok-bg:#F0FDF4;   --ok-line:#BBF7D0;
+  --warn:#D97706; --warn-bg:#FFFBEB; --warn-line:#FDE68A;
+  --bad:#DC2626;  --bad-bg:#FEF2F2;  --bad-line:#FECACA;
+  --calm:#6B7280; --calm-bg:#F3F4F6; --calm-line:#E5E7EB;
+  --jingga:#EA580C; --jingga-bg:#FFF7ED; --jingga-line:#FED7AA;
+
+  --paper:var(--bg); --rule:var(--line); --rule-2:var(--line-2);
+  --stamp:var(--ok);     --stamp-bg:var(--ok-bg);
+  --brass:var(--warn);   --brass-bg:var(--warn-bg);
+  --verm:var(--bad);     --verm-bg:var(--bad-bg);
+  --slate:var(--calm);   --slate-bg:var(--calm-bg);
+
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+  --t1:11px; --t2:12px; --t3:13px; --t4:14px; --t5:16px; --t6:22px; --t7:34px;
+  --r1:8px; --r2:12px; --r3:16px;
+  --bayang:0 1px 2px rgba(16,24,40,.05);
+  --bayang-2:0 12px 32px rgba(16,24,40,.12);
+
+  --ui:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0; min-height: 100vh; display: flex;
+  font-family: var(--ui); font-size: 14px; line-height: 1.55;
+  color: var(--ink); background: var(--paper);
+}
+
+a { color: inherit; }
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+button:focus-visible, a:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.lbl { font-size: var(--t2); color: var(--ink-3); font-weight: 500; letter-spacing: 0; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* ---------- sisi kiri ---------- */
+/* Terang, bukan gelap. Sidebar gelap membuat isinya terbaca sebagai wilayah
+   terpisah yang berdiri sendiri; di prototipe ia satu bidang dengan halamannya,
+   dipisah garis tipis saja. */
+.nav { width: 236px; flex: none; background: var(--surface);
+  border-right: 1px solid var(--line); color: var(--ink-2);
+  padding: 0 var(--s3) var(--s4); display: flex; flex-direction: column; gap: 1px;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto; z-index: 30; }
+.nav .brand { display: flex; align-items: center; gap: 11px;
+  padding: var(--s4) var(--s2) var(--s5); position: sticky; top: 0;
+  background: var(--surface); z-index: 2; }
+.nav .brand b { display: block; color: var(--ink); font-size: var(--t4);
+  font-weight: 700; letter-spacing: -.01em; }
+.nav .brand span { display: block; font-size: var(--t1); color: var(--ink-3);
+  line-height: 1.35; margin-top: 2px; }
+.nav a.item { display: flex; align-items: center; gap: 10px;
+  padding: 9px var(--s2); border-radius: var(--r1); font-size: var(--t3);
+  color: var(--ink-2); text-decoration: none; font-weight: 500; }
+.nav a.item:hover { background: var(--surface-2); color: var(--ink); }
+.nav a.item[aria-current="page"] { background: var(--aksen-bg);
+  color: var(--aksen-kuat); font-weight: 600; }
+/* Ikon di tiap butir menu, seperti prototipe. Ia bukan hiasan: daftar menu
+   yang seluruhnya tulisan memaksa dibaca kata demi kata, sedangkan bentuk
+   ikonnya dikenali sebelum tulisannya sempat dibaca. */
+.nav a.item > svg { flex: none; color: currentColor; opacity: .9; }
+.nav a.item > .tulisan { flex: 1; min-width: 0; }
+
+.nav .tanda { margin-left: auto; font-size: var(--t1); font-weight: 700;
+  background: var(--surface-3); color: var(--ink-2);
+  padding: 1px 7px; border-radius: 20px; min-width: 20px; text-align: center; }
+.nav a.item[aria-current="page"] .tanda { background: var(--aksen);
+  color: #fff; }
+.nav .kaki { margin-top: auto; padding-top: var(--s4);
+  border-top: 1px solid var(--line-2); }
+.nav .kaki .nm { color: var(--ink); font-size: var(--t3); font-weight: 600; }
+.nav .kaki .pr { font-size: var(--t2); color: var(--ink-3); margin-top: 2px; }
+.nav .kaki button { margin-top: 10px; width: 100%; background: var(--surface);
+  color: var(--ink-2); border: 1px solid var(--line); border-radius: var(--r1);
+  padding: 7px 9px; font-size: var(--t2); }
+.nav .kaki button:hover { background: var(--surface-2); color: var(--ink); }
+
+/* Kelompok menu: satu tajuk kecil di atas beberapa butir. Tanpa ini sembilan
+   tautan berderet rata dan tidak ada yang menunjukkan mana yang sekerabat. */
+.nav .grup { font-size: var(--t1); font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-3);
+  padding: var(--s4) var(--s2) var(--s1); }
+.nav .grup:first-of-type { padding-top: var(--s2); }
+
+/* ---------- sisi kanan ---------- */
+.utama { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.atas { background: var(--surface); border-bottom: 1px solid var(--line);
+  padding: var(--s4) var(--s5); display: flex; align-items: center;
+  gap: var(--s4); flex-wrap: wrap; position: sticky; top: 0; z-index: 20;
+  min-height: 72px; }
+.atas h1 { margin: 0; font-size: var(--t6); font-weight: 700;
+  letter-spacing: -.02em; line-height: 1.2; }
+.badan { padding: var(--s5) var(--s5) 56px; max-width: 1440px; width: 100%; }
+
+/* ---------- komponen ---------- */
+.kartu { background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r2); padding: var(--s4) 18px; box-shadow: var(--bayang); }
+.baris { display: block; width: 100%; text-align: left; background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--r2); padding: 14px 16px;
+  text-decoration: none; color: inherit; box-shadow: var(--bayang);
+  transition: border-color .12s, box-shadow .12s; }
+.baris:hover { border-color: var(--aksen-line); box-shadow: 0 2px 8px rgba(16,24,40,.08); }
+
+.btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 15px;
+  border-radius: var(--r1); font-size: var(--t3); font-weight: 500;
+  border: 1px solid var(--line); background: var(--surface); color: inherit;
+  text-decoration: none; }
+.btn:hover { background: var(--surface-2); border-color: var(--ink-3); }
+/* Tombol utama memakai aksen, bukan tinta hitam: yang hitam terbaca sebagai
+   "tutup" atau "batal" di hampir semua antarmuka lain. */
+.btn-p { background: var(--aksen); color: #fff; border-color: var(--aksen); }
+.btn-p:hover { background: var(--aksen-kuat); border-color: var(--aksen-kuat); }
+.btn-s { padding: 4px 10px; font-size: 12px; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+
+.cap { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px;
+  border-radius: 20px; font-size: var(--t1); letter-spacing: .02em;
+  font-weight: 600; white-space: nowrap; border: 1px solid transparent; }
+/* Titik kecil sewarna tulisannya: penanda kedua di samping warna latar,
+   supaya lencana tetap terbedakan saat dicetak hitam putih. */
+.cap::before { content: ""; width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor; flex: none; }
+.cap-BT { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-line); }
+.cap-SS { background: var(--ok-bg);   color: var(--ok);   border-color: var(--ok-line); }
+.cap-BS { background: var(--bad-bg);  color: var(--bad);  border-color: var(--bad-line); }
+.cap-TD { background: var(--calm-bg); color: var(--calm); border-color: var(--calm-line); }
+
+.sumber { display: inline-flex; padding: 2px 7px; border-radius: 3px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .08em; font-weight: 700; }
+.sumber-LHP { background: #EEF2FF; color: #4338CA; }
+.sumber-LHA { background: #ECFEFF; color: #0E7490; }
+
+/* rel posisi */
+.rel { display: flex; gap: 3px; margin: 8px 0 5px; }
+.rel i { display: block; height: 4px; flex: 1; border-radius: 2px; background: var(--rule); }
+.rel i.lewat { background: var(--ink-2); }
+.rel i.kini { background: var(--brass); }
+.rel i.ok { background: var(--stamp); }
+.rel i.bad { background: var(--verm); }
+.rel i.off { background: var(--slate); }
+
+/* progres */
+.prog { display: flex; align-items: center; gap: 9px; font-size: 11.5px; color: var(--ink-3); }
+.bar { flex: 1; min-width: 50px; max-width: 180px; height: 5px; border-radius: 3px;
+  background: var(--rule); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--stamp); border-radius: 3px; }
+.bar.dana i { background: var(--brass); }
+.prog b { color: var(--ink); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* tabel */
+.tw { overflow-x: auto; border: 1px solid var(--rule); border-radius: 7px; background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 10px; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--ink-3); font-weight: 500; white-space: nowrap;
+  background: var(--rule-2); }
+td { padding: 11px 12px; border-bottom: 1px solid var(--rule-2); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+.num { text-align: right; white-space: nowrap; }
+
+/* isian */
+label.f { display: block; margin-bottom: 14px; }
+label.f > .lbl { display: block; margin-bottom: 5px; }
+input[type=text], input[type=email], input[type=password], input[type=date],
+select, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--rule);
+  border-radius: 5px; background: var(--surface); font-size: 13px; color: var(--ink); }
+textarea { resize: vertical; min-height: 62px; }
+.hint { font-size: 11.5px; color: var(--ink-3); margin-top: 4px; }
+.duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0 16px; }
+.trio { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 14px; }
+
+/* pesan */
+.pesan { border-left: 3px solid var(--stamp); background: var(--stamp-bg);
+  color: var(--stamp); padding: 11px 14px; border-radius: 0 6px 6px 0;
+  font-size: 13px; margin-bottom: 16px; }
+.pesan.bad { border-left-color: var(--verm); background: var(--verm-bg); color: var(--verm); }
+.pesan.info { border-left-color: var(--brass); background: var(--brass-bg); color: var(--brass); }
+
+.kosong { text-align: center; padding: 30px 20px; color: var(--ink-3); font-size: 13px;
+  background: var(--surface); border: 1px dashed var(--rule); border-radius: 7px; }
+
+.stempel { border: 1.5px solid var(--stamp); border-radius: 5px; padding: 9px 12px;
+  display: inline-block; background: var(--stamp-bg); }
+.stempel b { font-family: var(--mono); font-size: 13px; color: var(--stamp); display: block; }
+
+.unsur { border-left: 2px solid var(--rule); padding-left: 13px; margin-bottom: 14px; }
+/* Daftar keterangan: nama di kiri, isi di kanan.
+
+   Nama keterangan memakai huruf UI, BUKAN mono. Mono di kolom kiri membuat
+   seluruhnya terbaca seperti kode, padahal isinya kata biasa - dan yang memang
+   kode (nomor surat, NTPN) jadi tidak lagi menonjol karena semuanya mono. */
+.kv { display: grid; grid-template-columns: 190px minmax(0, 1fr);
+  gap: 0 var(--s4); font-size: var(--t3); }
+.kv dt { display: flex; align-items: flex-start; gap: 6px; line-height: 1.5;
+  text-transform: uppercase; letter-spacing: .055em; font-size: var(--t1);
+  color: var(--ink-3); font-weight: 600; padding: 5px 0; }
+.kv dd { margin: 0; color: var(--ink); line-height: 1.55;
+  word-break: break-word; padding: 5px 0; }
+.kv dd > .ket, .kv dd .lbl { color: var(--ink-3); }
+
+/* Nilai bercorak warna ditulis sebagai teks biasa bertitik warna, bukan
+   lencana berbingkai. Di dalam daftar keterangan, lencana membuat tepi kiri
+   bergerigi - tulisan di dalamnya menjorok sejauh bingkai dan jaraknya,
+   sedangkan baris lain rata di tepi kolom. Titiknya menahan warnanya tanpa
+   memindahkan tulisannya. */
+.nilaikat { display: inline-flex; align-items: center; gap: 8px;
+  /* Titiknya berdiri di selokan antara nama dan isi - jaraknya persis selebar
+     selokan itu - supaya tulisannya sendiri tetap rata dengan baris lain. */
+  margin-left: -16px; }
+.nilaikat > i { width: 8px; height: 8px; border-radius: 999px; flex: none;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .06) inset; }
+
+@media (max-width: 620px) {
+  /* Satu kolom: tidak ada selokan yang bisa ditempati, jadi titiknya kembali
+     berdiri di dalam barisnya. */
+  .nilaikat { margin-left: 0; }
+}
+
+.berkas { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px;
+  border-radius: 5px; border: 1px solid var(--rule); background: var(--surface);
+  font-family: var(--mono); font-size: 11.5px; text-decoration: none; }
+.berkas:hover { border-color: var(--ink-3); background: var(--rule-2); }
+.berkas.tarik { border-style: dashed; background: var(--rule-2); color: var(--ink-3); font-style: italic; }
+
+/* halaman masuk */
+.masuk { margin: auto; width: 100%; max-width: 420px; padding: 40px 20px; }
+.masuk .kotak { background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 9px; padding: 26px 24px; }
+.masuk h1 { margin: 0 0 4px; font-size: 19px; font-weight: 600; }
+.masuk .sub { color: var(--ink-3); font-size: 13px; margin: 0 0 22px; }
+.akun { display: grid; gap: 6px; margin-top: 10px; }
+.akun button { text-align: left; background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 6px; padding: 8px 11px; font-size: 12.5px; display: flex;
+  justify-content: space-between; gap: 10px; align-items: center; }
+.akun button:hover { border-color: var(--ink-3); background: var(--rule-2); }
+
+@media (max-width: 820px) {
+  body { flex-direction: column; }
+  .nav { width: 100%; flex-direction: row; overflow-x: auto; padding: 9px;
+    align-items: center; gap: 5px; position: static; height: auto;
+    border-right: 0; border-bottom: 1px solid var(--line); }
+  .nav .brand { padding: 0 12px 0 4px; flex: none; position: static; }
+  .nav .brand span span { display: none; }
+  /* Tajuk kelompok cuma berarti saat menunya bertumpuk ke bawah. Di bilah
+     mendatar ia berderet bersama tautannya dan malah terbaca seperti tautan
+     yang tidak bisa ditekan. */
+  .nav .grup { display: none; }
+  .nav .brand .lambang { width: 30px; height: 30px; font-size: 11px; }
+  .nav a.item { white-space: nowrap; }
+  .nav .kaki { margin: 0; padding: 0; border: none; flex: none; display: flex;
+    gap: 8px; align-items: center; }
+  .nav .kaki button { margin: 0; width: auto; }
+  .badan { padding: 16px 14px 40px; }
+  .atas { padding: 13px 16px; }
+  .kv { grid-template-columns: 1fr; gap: 2px; }
+}
+
+/* Lencana penomoran resmi: nomor temuan dan nomor rekomendasi menurut surat
+   pemeriksa. Dibedakan dari .cap yang membawa status — yang ini identitas,
+   bukan keadaan. */
+.pil { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 5px;
+  background: var(--slate-bg); color: var(--slate); font-family: var(--mono);
+  font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  white-space: nowrap; }
+
+/* ================= keterangan melayang ================= */
+/* Ikon sekecil mungkin saat diam, jelas terbaca saat ditekan. Tanpa
+   JavaScript ia tetap tampil dan isinya tetap terbaca lewat atribut title —
+   yang hilang cuma panelnya. */
+.infoikon { position: relative; display: inline-flex; vertical-align: middle; }
+.infoikon > button { width: 15px; height: 15px; flex: none; padding: 0; border-radius: 999px;
+  display: inline-grid; place-items: center; cursor: pointer; border: 1px solid var(--rule);
+  background: var(--rule-2); color: var(--ink-3); font: inherit; font-size: 10px;
+  font-weight: 700; line-height: 1; letter-spacing: 0; }
+.infoikon > button:hover { border-color: var(--brass); background: var(--brass-bg); color: var(--brass); }
+.infoikon > .isi { display: none; }
+.infoikon[data-buka] > .isi { display: block; position: absolute; z-index: 60;
+  left: -4px; top: calc(100% + 8px); width: 290px; max-width: min(290px, 74vw);
+  background: var(--ink); color: #fff; border-radius: 6px; padding: 10px 12px;
+  font-family: var(--ui); font-size: 12px; font-weight: 400; line-height: 1.55;
+  letter-spacing: 0; text-transform: none; text-align: left;
+  box-shadow: 0 10px 26px -10px rgba(23, 38, 43, .5); }
+.infoikon[data-buka].ke-kiri > .isi { left: auto; right: -4px; }
+.infoikon[data-buka].ke-atas > .isi { top: auto; bottom: calc(100% + 8px); }
+.infoikon .isi > span { display: block; }
+.infoikon .isi > span + span { margin-top: 7px; }
+
+/* ================= sorotan bagian ================= */
+/* Bingkai sekejap saat mendarat dari pemberitahuan: di antara sekian kartu
+   yang bentuknya mirip, mata perlu diberi tahu yang mana yang dimaksud. */
+@keyframes sorotKedip {
+  0% { box-shadow: 0 0 0 0 var(--brass-bg); border-color: var(--rule); }
+  12% { box-shadow: 0 0 0 4px var(--brass-bg); border-color: var(--brass); }
+  70% { box-shadow: 0 0 0 4px var(--brass-bg); border-color: var(--brass); }
+  100% { box-shadow: 0 0 0 0 var(--brass-bg); border-color: var(--rule); }
+}
+.sorot { animation: sorotKedip 4.2s ease-in-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .sorot { animation: none; border-color: var(--brass); box-shadow: 0 0 0 3px var(--brass-bg); }
+}
+
+/* ================= kotak kabar ================= */
+/* Menempel di sudut bawah supaya tidak menutupi menu dan tombol di atas; di
+   layar sempit melebar penuh karena sudut yang sempit hanya menyisakan
+   potongan kalimat. */
+.sembul { position: fixed; right: 20px; bottom: 20px; z-index: 80;
+  display: flex; align-items: flex-start; gap: 11px;
+  width: min(370px, calc(100vw - 40px)); padding: 14px 14px 13px;
+  border-radius: 8px; background: var(--surface); border: 1px solid var(--rule);
+  box-shadow: 0 18px 40px -14px rgba(23, 38, 43, .32);
+  animation: sembulMasuk .34s cubic-bezier(.16, 1, .3, 1) both; }
+@keyframes sembulMasuk {
+  from { opacity: 0; transform: translateY(14px) scale(.97); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .sembul { animation: none; } }
+@media (max-width: 560px) { .sembul { right: 12px; left: 12px; bottom: 12px; width: auto; } }
+
+.sembul .lonceng-ikon { flex: none; display: grid; place-items: center;
+  width: 26px; height: 26px; border-radius: 50%; background: var(--brass-bg);
+  color: var(--brass); font-weight: 700; font-size: 13px; }
+.sembul .teks { flex: 1; min-width: 0; }
+.sembul .apa { display: block; font-size: 13px; line-height: 1.45; color: var(--ink); }
+.sembul .apa b { font-weight: 600; }
+.sembul .lbl { display: block; margin-top: 3px; line-height: 1.45; }
+.sembul .taut { display: inline-block; margin-top: 8px; color: var(--brass);
+  font-weight: 600; font-size: 12.5px; }
+.sembul .tutup { flex: none; display: grid; place-items: center; width: 24px; height: 24px;
+  border: 0; background: none; border-radius: 50%; color: var(--ink-3);
+  cursor: pointer; font-size: 17px; line-height: 1; margin: -3px -3px 0 0; }
+.sembul .tutup:hover { background: var(--rule-2); color: var(--ink); }
+
+/* Lambang bundar pada jenama, sama seperti prototipe. */
+.nav .brand .lambang { width: 38px; height: 38px; border-radius: 50%; flex: none;
+  display: grid; place-items: center; background: var(--aksen-bg);
+  color: var(--aksen-kuat); font-size: var(--t3); font-weight: 700;
+  border: 1px solid var(--aksen-line); }
+
+/* ---------- batang atas ---------- */
+.atas .cari-atas { flex: 1 1 240px; max-width: 420px; min-width: 0;
+  display: flex; gap: 6px; align-items: center; }
+.atas .cari-atas input { flex: 1; min-width: 0; font-size: var(--t3); }
+.atas .alat { display: flex; align-items: center; gap: var(--s3); margin-left: auto; }
+
+.lonceng { position: relative; display: grid; place-items: center;
+  width: 36px; height: 36px; border-radius: 50%; color: var(--ink-2);
+  text-decoration: none; flex: none; }
+.lonceng:hover { background: var(--surface-2); color: var(--ink); }
+.lonceng .n { position: absolute; top: 1px; right: 1px; min-width: 17px; height: 17px;
+  border-radius: 20px; background: var(--bad); color: #fff; font-size: 10px;
+  font-weight: 700; display: grid; place-items: center; padding: 0 4px;
+  border: 2px solid var(--surface); }
+
+/* ---------- kartu angka ---------- */
+/* Teks di kiri, ikon di kanan, sebaris. Angkanya besar dan bertinta penuh;
+   label serta keterangannya direndahkan — yang dicari mata saat menyapu
+   Beranda adalah bilangannya. */
+.statistik { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--s3); margin-bottom: var(--s5); }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r2);
+  padding: var(--s4) var(--s4) var(--s4) var(--s5); display: flex; align-items: center;
+  gap: var(--s3); box-shadow: var(--bayang); color: inherit; text-decoration: none; }
+.stat > div { flex: 1; min-width: 0; }
+.stat .l { font-size: var(--t3); font-weight: 600; margin-bottom: 6px; }
+.stat .v { font-size: 30px; font-weight: 700; letter-spacing: -.03em; line-height: 1;
+  font-variant-numeric: tabular-nums; }
+.stat .k { font-size: var(--t2); color: var(--ink-3); margin-top: 6px; line-height: 1.4; }
+
+/* Warna dipakai pada labelnya saja, bukan pada seluruh bidang kartu: lima
+   kartu berlatar warna berjajar terbaca seperti lima peringatan. */
+.stat.biru   .l { color: var(--aksen); }
+.stat.jingga .l { color: var(--jingga); }
+.stat.kuning .l { color: var(--warn); }
+.stat.hijau  .l { color: var(--ok); }
+.stat.merah  .l { color: var(--bad); }
+
+/* Kartu yang bisa ditekan: ada panah kecil di pojok dan tepinya menyala saat
+   disorot, supaya jelas bedanya dari kartu yang cuma memberi angka. */
+.stat.bisa { cursor: pointer; position: relative;
+  transition: border-color .12s, box-shadow .12s; }
+.stat.bisa:hover { border-color: var(--aksen-line); box-shadow: 0 2px 8px rgba(16,24,40,.08); }
+.stat .tunjuk { position: absolute; right: 10px; bottom: 10px; color: var(--ink-3);
+  opacity: 0; transition: opacity .12s; }
+.stat.bisa:hover .tunjuk { opacity: 1; }
+
+/* ---------- tata dua kolom ---------- */
+/* Pekerjaan di kiri, rel pantauan di kanan. */
+.dua { display: grid; grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--s5); align-items: start; }
+/* Anak grid bawaannya min-width:auto — ia menolak menyusut di bawah lebar
+   isinya, sehingga satu baris panjang cukup untuk melebarkan seluruh halaman
+   dan memunculkan geseran mendatar. */
+.dua > * { min-width: 0; }
+/* Namanya `relkanan`, bukan `rel`: `.rel` sudah dipakai deret tahap tipis di
+   tiap kartu rekomendasi, dan menimpanya membuat deret itu menumpuk jadi
+   balok-balok tebal. */
+.relkanan { position: sticky; top: 96px; display: grid; gap: var(--s4); }
+@media (max-width: 1180px) {
+  .dua { grid-template-columns: 1fr; }
+  .relkanan { position: static; }
+}
+
+/* ---------- navigasi kontekstual ---------- */
+/* Gaya kartu yang bisa ditekan ada di blok kartu angka di atas. Jangan
+   menambahkan aturan `a.stat` di sini: kekhususannya lebih tinggi daripada
+   `.stat`, jadi ia diam-diam menimpa tata letak flex dan ikonnya jatuh ke
+   bawah teks. */
+
+/* Berkas yang ditandai saat datang dari kartu angka. Warnanya mengikuti kartu
+   yang ditekan supaya mata bisa menyambungkan "yang tadi saya tekan" dengan
+   "yang ini". Ditandai peladen, bukan skrip — jadi tetap terlihat tanpa JS. */
+.baris.tandai { position: relative; border-color: var(--aksen);
+  box-shadow: 0 0 0 3px var(--aksen-bg); }
+.baris.tandai.bad    { border-color: var(--bad);    box-shadow: 0 0 0 3px var(--bad-bg); }
+.baris.tandai.warn   { border-color: var(--warn);   box-shadow: 0 0 0 3px var(--warn-bg); }
+.baris.tandai.jingga { border-color: var(--jingga); box-shadow: 0 0 0 3px var(--jingga-bg); }
+.baris.tandai.ok     { border-color: var(--ok);     box-shadow: 0 0 0 3px var(--ok-bg); }
+
+/* Bagian yang dituju: judulnya diberi garis tepi supaya kelompok mana yang
+   dimaksud terbaca sekali lihat, bahkan sebelum menggulir. */
+.sorot-bagian > div:first-child { border-left: 3px solid var(--aksen);
+  padding-left: 9px; margin-left: -12px; }
+
+/* ---------- daftar yang bisa dilipat ---------- */
+/* Terjemahan komponen `Daftar` di prototipe. Segitiga bawaan <details>
+   disembunyikan dan diganti panah sendiri supaya bentuknya sama di tiap
+   peramban. */
+.blokjudul { display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 9px 0; margin-bottom: var(--s3); font-size: var(--t4); font-weight: 600;
+  color: var(--ink); border-bottom: 1px solid var(--line); cursor: pointer;
+  list-style: none; }
+.blokjudul::-webkit-details-marker { display: none; }
+.blokjudul:hover { color: var(--aksen); }
+.blokjudul .n { margin-left: auto; font-size: var(--t2); color: var(--ink-3); font-weight: 500; }
+.panah { display: inline-block; transition: transform .12s; color: var(--ink-3);
+  font-size: var(--t5); line-height: 1; }
+details[open] > .blokjudul > .panah,
+details[open] > summary > .panah { transform: rotate(90deg); }
+
+/* Kelompok di dalam daftar: dipecah menurut siapa yang memegang berkasnya. */
+.kelompok { margin-bottom: 10px; }
+.kelompok > summary { display: flex; align-items: center; gap: 9px;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r1);
+  background: var(--surface-2); font-size: var(--t3); color: var(--ink-2);
+  cursor: pointer; list-style: none; }
+.kelompok > summary::-webkit-details-marker { display: none; }
+.kelompok > summary:hover { border-color: var(--aksen-line); background: var(--aksen-bg); }
+.kelompok > summary .n { margin-left: auto; font-size: var(--t2); color: var(--ink-3); }
+.kelompok > summary .telat { font-size: var(--t2); color: var(--bad); font-weight: 600; }
+
+.kosong { padding: var(--s4); color: var(--ink-3); font-size: var(--t3); text-align: center;
+  background: var(--surface-2); border: 1px dashed var(--line); border-radius: var(--r2); }
+
+/* ---------- baris penyaring ---------- */
+.saring { display: flex; gap: var(--s3); margin-bottom: var(--s5);
+  flex-wrap: wrap; align-items: center; }
+.saring select { width: auto; min-width: 170px; }
+.saring .cari { flex: 1 1 260px; min-width: 0; }
+.saring .cari input { width: 100%; }
+
+/* ---------- rel tahap ---------- */
+/* Sederet kotak, bukan sederet garis tipis: yang dicari orang bukan "sudah
+   berapa persen" melainkan "sekarang di tahap mana, dan tahap itu artinya
+   apa". Karena itu tiap tahap menyebut namanya sendiri berikut keadaannya. */
+.langkah { display: flex; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r2); padding: 6px; margin-bottom: var(--s5);
+  box-shadow: var(--bayang); overflow-x: auto; }
+.langkah > div { flex: 1; min-width: 150px; display: flex; align-items: flex-start;
+  gap: 10px; padding: 12px var(--s3); border-radius: var(--r1); position: relative; }
+.langkah > div .bul { width: 24px; height: 24px; border-radius: 50%; flex: none;
+  display: grid; place-items: center; font-size: var(--t2); font-weight: 700;
+  background: var(--surface-3); color: var(--ink-3); border: 1px solid var(--line); }
+.langkah > div .nm { display: block; font-size: var(--t3); font-weight: 600;
+  color: var(--ink-3); line-height: 1.3; }
+.langkah > div .ket { display: block; font-size: var(--t2); color: var(--ink-3);
+  line-height: 1.35; margin-top: 2px; }
+
+.langkah > div.selesai .bul { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-line); }
+.langkah > div.selesai .nm { color: var(--ink); }
+
+.langkah > div.aktif::before { content: ""; position: absolute; left: var(--s3);
+  right: var(--s3); top: -6px; height: 3px; border-radius: 0 0 3px 3px; background: var(--aksen); }
+.langkah > div.aktif .bul { background: var(--aksen); color: #fff; border-color: var(--aksen); }
+.langkah > div.aktif .nm { color: var(--aksen-kuat); }
+
+/* Menunggu diteruskan: tahapnya jadi giliran berikutnya, tapi pekerjaannya
+   belum dimulai — lingkarannya berongga, bukan terisi. */
+.langkah > div.antre .bul { background: var(--surface); color: var(--aksen);
+  border-color: var(--aksen); border-style: dashed; }
+.langkah > div.antre .nm { color: var(--aksen-kuat); }
+
+@media (max-width: 767px) { .langkah > div .ket { display: none; } }
+
+/* ---------- ikon kotak ---------- */
+/* Ikon tidak berdiri telanjang: dialasi kotak berwarna supaya jadi jangkar
+   mata di kepala kartu, dan supaya warnanya punya bidang untuk dibaca. */
+.ic-kotak { width: 32px; height: 32px; border-radius: var(--r1); flex: none;
+  display: grid; place-items: center; background: var(--aksen-bg); color: var(--aksen); }
+.ic-kotak.hijau  { background: var(--ok-bg);     color: var(--ok); }
+.ic-kotak.kuning { background: var(--warn-bg);   color: var(--warn); }
+.ic-kotak.merah  { background: var(--bad-bg);    color: var(--bad); }
+.ic-kotak.jingga { background: var(--jingga-bg); color: var(--jingga); }
+.ic-kotak.abu    { background: var(--calm-bg);   color: var(--calm); }
+.ic-kotak.besar  { width: 44px; height: 44px; border-radius: var(--r2); }
+
+/* ---------- kepala kartu ---------- */
+.judulkartu { display: flex; align-items: center; gap: 10px; margin-bottom: var(--s4); }
+.judulkartu > h3 { margin: 0; font-size: var(--t5); font-weight: 600;
+  letter-spacing: -.01em; flex: 1; }
+.judulkartu > .n { font-size: var(--t2); color: var(--ink-3); font-weight: 500; }
+.kartu.rapat { padding: var(--s4); }
+
+/* ---------- baris tenggat di rel kanan ---------- */
+.tenggat { display: flex; align-items: center; gap: var(--s3); padding: 11px 0;
+  border-bottom: 1px solid var(--line-2); text-decoration: none; color: inherit; }
+.tenggat:last-child { border-bottom: none; }
+.tenggat:hover b { color: var(--aksen); }
+.tenggat > div { flex: 1; min-width: 0; }
+.tenggat b { display: block; font-size: var(--t3); font-weight: 600; }
+.tenggat span { display: block; font-size: var(--t2); color: var(--ink-3); margin-top: 2px; }
+
+/* ---------- kartu berkas sebagai pekerjaan ---------- */
+/* Susunan mendatar: lencana kemendesakan, tindakan, tenggat, tombol buka.
+   Dipakai sama di seluruh daftar supaya bentuknya tidak pernah berubah-ubah
+   dari satu layar ke layar lain. */
+.tugas { display: flex; align-items: center; gap: var(--s4); width: 100%;
+  text-align: left; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r2); padding: var(--s3) var(--s4); flex-wrap: wrap;
+  text-decoration: none; color: inherit;
+  transition: border-color .12s, box-shadow .12s; }
+.tugas:hover { border-color: var(--aksen-line); box-shadow: var(--bayang); }
+
+.tugas > .inti { flex: 1; min-width: 200px; }
+.tugas > .inti b { display: block; font-size: var(--t4); font-weight: 600; letter-spacing: -.01em; }
+.tugas > .inti span { display: block; font-size: var(--t2); color: var(--ink-3); margin-top: 2px; }
+
+.tugas > .sisi { text-align: right; }
+.tugas > .sisi b { display: block; font-size: var(--t3); font-weight: 600; }
+.tugas > .sisi span { display: block; font-size: var(--t2); color: var(--ink-3); margin-top: 2px; }
+
+.tugas > .buka { display: inline-flex; align-items: center; gap: 5px; font-size: var(--t3);
+  font-weight: 600; color: var(--aksen); border: 1px solid var(--line);
+  border-radius: var(--r1); padding: 7px 12px; flex: none; }
+.tugas:hover > .buka { border-color: var(--aksen-line); background: var(--aksen-bg); }
+
+/* Garis tepi kiri menyebut kemendesakannya tanpa menambah satu kata pun. */
+.tugas.utama { border-left: 3px solid var(--aksen); }
+.tugas.genting { border-left: 3px solid var(--bad); }
+.tugas.awas { border-left: 3px solid var(--warn); }
+
+/* Yang bukan giliran kita mengecil dan meredup, tapi tidak dihilangkan:
+   memantau tetap perlu, cuma tidak boleh menenggelamkan pekerjaan hari ini. */
+.tugas.sepi { background: var(--surface-2); border-color: var(--line-2); box-shadow: none; }
+.tugas.sepi > .inti b { font-weight: 500; color: var(--ink-2); }
+.tugas.sepi:hover { background: var(--surface); }
+
+@media (max-width: 620px) {
+  .tugas > .sisi { text-align: left; }
+  .tugas > .buka { width: 100%; justify-content: center; }
+}
+
+/* ---------- rincian laporan ---------- */
+/* Angka ringkas kondisi laporan. Kotak besar berangka, bukan baris teks:
+   yang dicari mata di kepala halaman adalah bilangannya. */
+.angkalap { border: 1px solid var(--line); border-radius: var(--r2);
+  background: var(--surface-2); padding: 13px 15px; }
+.angkalap .v { font-size: 22px; font-weight: 700; letter-spacing: -.03em; line-height: 1.15; }
+.angkalap .l { font-size: var(--t2); color: var(--ink-3); margin-top: 4px; line-height: 1.4; }
+.angkalap.hijau { background: var(--ok-bg); border-color: var(--ok-line); }
+.angkalap.hijau .v { color: var(--ok); }
+.angkalap.kuning { background: var(--warn-bg); border-color: var(--warn-line); }
+.angkalap.kuning .v { color: var(--warn); }
+
+/* Keping posisi berkas: nama pemegang plus angkanya. */
+.keping { display: inline-flex; align-items: center; gap: 7px; font-size: var(--t2);
+  color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 999px; padding: 5px 11px; }
+.keping b { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* ---------- blok temuan ---------- */
+/* Bawaannya tertutup: laporan bisa memuat belasan temuan, dan kalau semua
+   terbuka isinya jadi dinding teks yang tidak ada yang membacanya. */
+.temblok { border: 1px solid var(--line); border-radius: var(--r2);
+  background: var(--surface); margin-bottom: 10px; }
+.temblok > summary { display: flex; align-items: center; gap: 12px;
+  padding: var(--s4); cursor: pointer; list-style: none; }
+.temblok > summary::-webkit-details-marker { display: none; }
+.temblok > summary:hover { background: var(--surface-2); border-radius: var(--r2); }
+.temblok[open] > summary { border-bottom: 1px solid var(--line-2); border-radius: var(--r2) var(--r2) 0 0; }
+.temblok .no { flex: none; width: 22px; font-size: 15px; font-weight: 700; color: var(--ink-3); }
+.temblok summary .isi { flex: 1; min-width: 0; }
+.temblok summary .isi b { display: block; font-size: var(--t4); font-weight: 600;
+  letter-spacing: -.01em; line-height: 1.4; }
+.temblok summary .isi .lbl { display: block; margin-top: 3px; }
+/* Jarak antar bagian diatur satu tempat, bukan lewat margin yang ditempel
+   satu per satu — supaya iramanya sama di semua temuan. */
+.temblok .isitem { display: grid; gap: var(--s4);
+  padding: var(--s4) var(--s5) var(--s5); }
+
+/* Kategori sebagai lencana, bukan kalimat abu-abu di dasar blok. */
+.katbaris { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+.tagkat { display: inline-flex; align-items: center; font-size: var(--t1);
+  font-weight: 600; letter-spacing: .01em; padding: 3px 10px; border-radius: 999px;
+  background: var(--aksen-bg); color: var(--aksen-kuat);
+  border: 1px solid var(--aksen-line); }
+.tagkat.dalam { background: var(--surface-2); color: var(--ink-2);
+  border-color: var(--line); }
+
+.pantau { display: inline-flex; align-items: center; gap: 5px; font-size: var(--t1);
+  color: var(--ink-3); background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 999px; padding: 3px 9px; flex: none; }
+
+/* Sebab dan akibat, dipisah garis kiri supaya terbaca sebagai satu kesatuan. */
+.unsur { display: grid; gap: 12px; border-left: 2px solid var(--line);
+  padding-left: var(--s4); }
+.unsur .lbl { margin-bottom: 4px; }
+.unsur p { margin: 0; font-size: 13px; line-height: 1.55; }
+
+/* Ringkasan uang pada blok temuan: satu bilah, lalu angka-angka berlabel yang
+   sejajar. Tiap angka punya namanya sendiri, jadi tidak ada yang perlu ditebak
+   dari urutan katanya. */
+.uang { display: grid; gap: 10px; }
+.uang > .bar { max-width: none; }
+.uang > .angka { display: flex; flex-wrap: wrap; gap: 8px 26px; }
+.uang > .angka > div { display: grid; gap: 2px; }
+.uang > .angka b { font-size: 15px; font-weight: 700;
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.uang > .angka .lbl { display: flex; align-items: center; gap: 5px; }
+
+/* Baris yang tenggatnya lewat atau tinggal sepekan. Warnanya tidak berdiri
+   sendiri — kolom Tenggat jawab juga menulis "lewat N hari" apa adanya. */
+tr.awas > td { background: var(--bad-bg); }
+tr.awas > td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
+
+.panahbaris { display: inline-block; color: var(--ink-3); flex: none;
+  vertical-align: -2px; transition: transform .15s; }
+tr.bukaan.buka .panahbaris { transform: rotate(90deg); color: var(--ink); }
+
+/* ---------- babak bernomor pada rincian rekomendasi ---------- */
+.babak { display: flex; align-items: center; gap: 10px; margin: 26px 0 12px;
+  padding-bottom: 9px; border-bottom: 2px solid var(--line); }
+.babak > .no { display: inline-grid; place-items: center; width: 22px; height: 22px;
+  flex: none; border-radius: 999px; background: var(--aksen); color: #fff;
+  font-size: var(--t1); font-weight: 700; }
+.babak > b { font-size: var(--t5); font-weight: 700; letter-spacing: -.015em; color: var(--ink); }
+
+/* ---------- keping kode berlabel ---------- */
+.kode { display: inline-flex; align-items: stretch; border: 1px solid var(--line);
+  border-radius: 6px; overflow: hidden; font-size: var(--t1); line-height: 1; white-space: nowrap; }
+.kode > .k { display: inline-flex; align-items: center; padding: 4px 7px;
+  background: var(--surface-2); color: var(--ink-3); font-weight: 700;
+  letter-spacing: .03em; text-transform: uppercase; border-right: 1px solid var(--line); }
+.kode > .i { display: inline-flex; align-items: center; padding: 4px 8px;
+  color: var(--ink-2); font-weight: 600; letter-spacing: 0; }
+
+/* ---------- deret tab bahan rujukan ---------- */
+/* Dipakai <details> berpasangan, bukan tab ber-JavaScript: keduanya boleh
+   terbuka bersamaan, dan yang mencari berkas tidak perlu menutup riwayat. */
+.rujukan > summary { display: flex; align-items: center; gap: 9px; padding: 10px 14px;
+  border: 1px solid var(--line); border-radius: var(--r2); background: var(--surface-2);
+  font-size: var(--t3); font-weight: 600; color: var(--ink-2); cursor: pointer;
+  list-style: none; margin-bottom: 10px; }
+.rujukan > summary::-webkit-details-marker { display: none; }
+.rujukan > summary:hover { border-color: var(--aksen-line); background: var(--aksen-bg); }
+.rujukan > summary .n { margin-left: auto; font-size: var(--t2); color: var(--ink-3); font-weight: 500; }
+
+/* ==================================================================
+   Kepala kolom yang sekaligus tombol urut.
+
+   Tanda panahnya redup selama kolom itu belum dipakai — kalau semuanya
+   menyala, tidak ada yang menonjol dan orang tidak tahu tabelnya sedang
+   diurutkan menurut apa.
+
+   Di sini ia tautan biasa, bukan tombol: pengurutannya dikerjakan peladen
+   lewat ?urut= dan ?arah=, jadi halamannya tetap berfungsi penuh tanpa
+   JavaScript dan tampilannya bisa disalin-kirim.
+   ================================================================== */
+th.urutkan { padding: 0; }
+th.urutkan > a { display: flex; align-items: center; gap: 6px;
+  padding: 11px 16px; color: inherit; text-decoration: none; }
+th.urutkan > a:hover { color: var(--ink-2); }
+th.urutkan .panahurut { font-size: 11px; color: var(--rule);
+  transition: color .12s; }
+th.urutkan > a:hover .panahurut { color: var(--ink-3); }
+th.urutkan.aktif > a { color: var(--aksen-kuat); }
+th.urutkan.aktif .panahurut { color: var(--aksen); }
+
+/* Keping satuan kerja di dalam sel tabel: mengalir, tidak berjejal. */
+td > .keping { margin: 0 4px 4px 0; }
+
+
+/* ==================================================================
+   Formulir laporan baru: pilihan satuan kerja yang jamak.
+   ================================================================== */
+
+/* Kotak centang satuan kerja terperiksa. Mengalir, bukan satu per baris:
+   daftarnya belasan, dan satu per baris membuat formulirnya sepanjang layar
+   sendiri padahal yang dicentang biasanya cuma satu atau dua. */
+.pilihsatker { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.pilihsatker > label { display: inline-flex; align-items: center; gap: 7px;
+  font-size: var(--t3); cursor: pointer; padding: 4px 0; }
+.pilihsatker input { width: auto; margin: 0; }
+
+/* Satu baris satu satuan kerja: nama, bagiannya, tombol buang. Tombolnya
+   selebar dirinya sendiri supaya kolom nilainya tidak ikut menyusut. */
+.barissasaran { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) 36px;
+  gap: 8px; align-items: start; margin-bottom: 8px; }
+.barissasaran > button { padding: 0; height: 36px; }
+@media (max-width: 620px) {
+  .barissasaran { grid-template-columns: minmax(0, 1fr) 36px; }
+  .barissasaran > select { grid-column: 1 / -1; }
+}
+
+/* ==================================================================
+   Judul bagian pada layar yang isinya beberapa keranjang berurutan
+   (mis. Urusan SIPTL). Bukan kartu: bagiannya berurutan sebagai satu
+   pekerjaan, dan membingkai masing-masing memutus urutannya.
+   ================================================================== */
+.judulbagian { display: flex; align-items: center; gap: 10px;
+  margin: 0 0 12px; }
+.judulbagian > b { font-size: var(--t4); font-weight: 600; color: var(--ink);
+  white-space: nowrap; }
+.judulbagian > .n { font-size: var(--t2); font-weight: 700; color: var(--ink-3);
+  font-variant-numeric: tabular-nums; }
+.judulbagian > .garis { flex: 1; height: 1px; background: var(--line-2); min-width: 12px; }
+
+/* Lencana kuning: menggantung terlalu lama, tapi bukan lewat tenggat —
+   BPK memang tidak punya tenggat membalas, jadi ini peringatan lembut, bukan
+   tanda merah. */
+.pil.kuning { background: var(--brass-bg); color: var(--brass); }
+
+/* ==================================================================
+   KEPALA TABEL — disalin apa adanya dari prototipe.
+
+   Susunannya sama di layar Rekomendasi dan Daftar laporan:
+
+       .kepalatabel
+         .pilihgrup      keranjang, satu tombol satu keadaan
+         .barissaring    kotak cari + pemilih
+         .hint           berapa yang tampil, disaring dari berapa
+
+   Di prototipe tombolnya menyetel keadaan React; di sini ia tautan yang
+   membawa keadaannya di alamat. Bentuknya sama persis — yang berbeda hanya
+   siapa yang mengerjakan penyaringannya, dan di sini peladen, jadi halamannya
+   tetap berfungsi penuh tanpa JavaScript.
+   ================================================================== */
+.kepalatabel { display: grid; gap: var(--s3); margin-bottom: var(--s4); }
+
+.pilihgrup { display: flex; gap: 3px; padding: 3px; border-radius: 8px;
+  background: var(--surface-2); border: 1px solid var(--line); flex-wrap: wrap; }
+.pilihgrup > a, .pilihgrup > button {
+  padding: 7px 13px; border: 0; border-radius: 6px; cursor: pointer;
+  background: transparent; color: var(--ink-3); font: inherit; font-size: 13px;
+  font-weight: 600; display: inline-flex; align-items: center; gap: 7px;
+  text-decoration: none; }
+.pilihgrup > a:hover, .pilihgrup > button:hover { color: var(--ink); }
+.pilihgrup > [aria-pressed="true"] { background: var(--surface); color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+.pilihgrup .n { font-size: 11.5px; font-weight: 700; padding: 1px 7px;
+  border-radius: 20px; background: var(--surface-2); color: var(--ink-3);
+  font-variant-numeric: tabular-nums; }
+.pilihgrup > [aria-pressed="true"] .n { background: var(--aksen-bg);
+  color: var(--aksen-kuat); }
+
+/* Pemisah sebelum keping yang bukan keadaan berkas, melainkan urusan
+   tersendiri — mis. SIPTL. Tanpa garis ini ia terbaca sebagai keranjang
+   keempat yang sederajat, padahal bukan. */
+.pilihgrup > .pemisah { width: 1px; align-self: stretch; margin: 2px 5px;
+  background: var(--line); flex: none; }
+
+/* Tanda silang pada keping yang sedang menyala: menekannya melepas
+   saringannya. Redup sampai disentuh — ia jalan keluar, bukan tombol utama. */
+.pilihgrup .lepas { opacity: .45; margin-left: -3px; flex: none;
+  font-size: 12px; line-height: 1; }
+.pilihgrup > a:hover .lepas { opacity: 1; }
+
+.barissaring { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
+.barissaring select { width: auto; min-width: 150px; flex: 0 1 auto; }
+.barissaring .cari { position: relative; flex: 1 1 240px; }
+.barissaring .cari input { width: 100%; padding-left: 38px; }
+.barissaring .cari > svg { position: absolute; left: 13px; top: 50%;
+  transform: translateY(-50%); color: var(--ink-3); pointer-events: none; }
+
+/* Baris tabel yang sekali klik membuka rinciannya. Nomor surat di dalamnya
+   tetap tautan sungguhan — supaya bisa dibuka di tab baru, dan supaya
+   barisnya tetap bisa dicapai dari papan tik. */
+tr.bukaan { cursor: pointer; }
+tr.bukaan:hover > td { background: var(--surface-2); }
+
+
+/* Baris yang baru saja disentuh sebuah tindakan. Warnanya menyebut apa yang
+   terjadi: biru untuk perpindahan biasa, hijau untuk yang lolos, jingga untuk
+   yang dipulangkan. */
+tr.tandai > td { background: var(--aksen-bg); }
+tr.tandai > td:first-child { box-shadow: inset 3px 0 0 var(--aksen); }
+tr.tandai.ok > td { background: var(--stamp-bg); }
+tr.tandai.ok > td:first-child { box-shadow: inset 3px 0 0 var(--stamp); }
+tr.tandai.jingga > td { background: var(--brass-bg); }
+tr.tandai.jingga > td:first-child { box-shadow: inset 3px 0 0 var(--brass); }
+tr.tandai.bad > td { background: var(--verm-bg); }
+tr.tandai.bad > td:first-child { box-shadow: inset 3px 0 0 var(--verm); }
+
+
+/* Angka yang menuntut dilihat sekarang - kabar belum dibaca. Merah penuh,
+   bukan abu: yang lain menyebut berapa banyak pekerjaan, yang ini menyebut
+   ada yang terlewat. */
+.nav .tanda.genting { background: var(--bad); color: #fff; }
+.nav a.item[aria-current="page"] .tanda.genting { background: var(--bad); }
+
+
+/* ==================================================================
+   RINCIAN REKOMENDASI - disalin dari prototipe.
+
+   Kepala rekomendasi berdiri di dalam satu wadah bersama tabel tindak
+   lanjutnya, bukan sebagai kartu terpisah: keduanya menjawab satu pertanyaan
+   yang sama - "apa yang diminta, dan siapa sudah sampai mana" - dan
+   memisahkannya jadi dua kotak membuat pembacanya mengira itu dua hal.
+   ================================================================== */
+.wadahtl { background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r2); box-shadow: var(--bayang); margin-bottom: var(--s5);
+  overflow: hidden; }
+
+.kepalarek { padding: var(--s5) var(--s4) var(--s4); background: var(--surface);
+  border-bottom: 1px solid var(--line); }
+.kepalarek .tanda { display: flex; gap: 10px; align-items: center;
+  flex-wrap: wrap; margin-bottom: var(--s3); }
+.kepalarek .tanda.kecil { gap: 8px; margin-bottom: var(--s4); }
+.kepalarek h2 { margin: 0 0 var(--s2); font-size: 19px; font-weight: 700;
+  letter-spacing: -.022em; line-height: 1.35; color: var(--ink); }
+.kepalarek .jdltem { font-size: var(--t3); color: var(--ink-3); }
+.kepalarek .fakta { padding-top: var(--s3); border-top: 1px solid var(--rule-2); }
+.kepalarek .catat { margin-top: var(--s3); padding-top: var(--s3);
+  border-top: 1px solid var(--rule-2); }
+
+/* Lencana penomoran resmi. Biru karena inilah yang dipakai menyebut
+   rekomendasi ini di luar aplikasi - kode sistem justru yang redup. */
+.pil.biru { background: var(--aksen-bg); color: var(--aksen-kuat); }
+
+/* Baris kepala tabel tindak lanjut: berapa satuan kerja yang sudah memadai,
+   dan bunyi suratnya. */
+.kepalatl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: var(--s3) var(--s4); font-size: var(--t2); color: var(--ink-3);
+  border-bottom: 1px solid var(--rule-2); }
+.kepalatl > .bar { flex: 0 1 140px; }
+.kakitl { display: flex; align-items: baseline; gap: 10px;
+  padding: var(--s3) var(--s4); border-top: 1px solid var(--rule-2); }
+.kakitl > .mono { margin-left: auto; font-weight: 700; color: var(--ink); }
+
+.tabtl > tbody > tr > td { font-size: var(--t3); vertical-align: middle; }
+.tabtl .kolno { padding-left: var(--s3); padding-right: var(--s3);
+  font-size: var(--t2); color: var(--ink-3); }
+
+/* Kondisi dan kriteria turun ke ruasnya sendiri: dijejalkan ke kolom isi
+   daftar keterangan, keduanya jadi paragraf sempit yang terpenggal satu kata
+   per baris. */
+.kartu.lipatsatu > .ruas { margin-top: var(--s4); padding-top: var(--s4);
+  border-top: 1px solid var(--rule-2); }
+.kartu.lipatsatu > .ruas > .unsur + .unsur { margin-top: var(--s3); }
+
+@media (max-width: 700px) {
+  .kepalarek { padding: var(--s4) var(--s3); }
+  .kepalarek h2 { font-size: 17px; }
+}
+
+/* Judul kelompok di dalam satu kartu: garisnya memanjang ke kanan supaya
+   kelompok berikutnya terbaca sebagai lanjutan, bukan kartu lain. */
+.subjudul { display: flex; align-items: center; gap: 9px; margin-bottom: var(--s3); }
+.subjudul > b { font-size: var(--t3); font-weight: 700; color: var(--ink);
+  white-space: nowrap; }
+.subjudul > .garis { flex: 1; height: 1px; background: var(--line-2); min-width: 12px; }
+
+/* Angka di dalam daftar keterangan. Sedikit lebih besar dan tebal daripada
+   tulisan di sebelahnya — tanpa itu "2" dan "Rp 450.000.000" tenggelam jadi
+   teks biasa, padahal justru angkanya yang dibaca duluan. Tidak dibuat sebesar
+   kotak angka yang lama: di dalam daftar, tinggi baris yang seragam itu yang
+   membuat namanya tetap sejajar. */
+.angkafakta { font-size: 15px; font-weight: 700; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums; }
+
+
+/* Pita komposisi. Tiap potongan ditempeli kodenya sendiri, bukan cuma
+   diwarnai: palet proyek ini gagal uji buta warna — vermilion dan brass hanya
+   berjarak DeltaE 4,1 di mata deutan. Warna di sini membantu, tapi tidak
+   pernah jadi satu-satunya penanda. */
+.pita { display: flex; height: 30px; border-radius: 6px; overflow: hidden;
+  border: 1px solid var(--rule); }
+.pita > span { display: grid; place-items: center; min-width: 0;
+  box-shadow: 2px 0 0 0 var(--surface); }
+.pita > span > b { font-size: 10px; font-weight: 700; color: #fff;
+  letter-spacing: .05em; white-space: nowrap; padding: 0 6px; }
+
+
+/* Bagian kedua dan seterusnya di dalam satu kartu: garis tipis di atasnya,
+   bukan kartu tersendiri. Keduanya menerangkan hal yang sama - membingkai
+   masing-masing membuat pembacanya mengira itu dua hal. */
+.kartu .ruas { margin-top: var(--s5); padding-top: var(--s4);
+  border-top: 1px solid var(--rule-2); }
+
+
+/* ==================================================================
+   BARIS TINDAK LANJUT YANG DIBENTANGKAN - disalin dari prototipe.
+   ================================================================== */
+
+/* Bilah alur rekomendasi: tahap tingkat dua, milik rekomendasinya sendiri. */
+.alurrek { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 11px var(--s4); background: var(--aksen-bg);
+  border-bottom: 1px solid var(--line-2); }
+.alurrek > b { font-size: 13px; font-weight: 600; }
+
+/* Kepala kelompok: bentuk tindak lanjutnya, disebut sekali. */
+.tabtl tr.grupbaris > td { background: var(--surface-2); font-size: var(--t3);
+  border-top: 1px solid var(--line-2); }
+
+.tabtl .kolaksi { width: 110px; text-align: right; white-space: nowrap; }
+/* Tombolnya saklar sungguhan sekarang, bukan hiasan: `pointer-events: none`
+   yang dulu ada di sini membuatnya tidak bisa ditekan sama sekali. */
+.tabtl .kolaksi .btn { min-width: 74px; justify-content: center; }
+
+/* Baris rincian. Tidak berbingkai sendiri: ia bagian dari barisnya, bukan
+   kotak baru yang kebetulan berada di bawahnya. */
+tr.lebar > td { padding: 0; background: var(--surface-2);
+  border-bottom: 1px solid var(--rule-2); }
+.tabtl > tbody > tr.lebar > td { vertical-align: top; }
+.isilebar { display: grid; gap: var(--s4);
+  padding: var(--s4) var(--s4) var(--s5); max-width: 100%; }
+
+/* Isi baris yang melebar tidak boleh ikut menentukan lebar tabelnya. Nama
+   berkas dan lencana di dalamnya tidak bisa dipenggal, jadi tanpa ini satu
+   judul panjang memaksa seluruh tabel melar beberapa piksel — cukup untuk
+   memunculkan batang geser mendatar yang sebenarnya tidak menggeser apa pun.
+   width:0 membuat lebar terkecilnya nol, min-width:100% mengembalikannya
+   memenuhi sel. */
+tr.lebar > td > .isilebar { width: 0; min-width: 100%; }
+
+.isilebar .kepala { display: flex; gap: var(--s3); flex-wrap: wrap;
+  align-items: baseline; }
+.isilebar .konteks { font-size: 13px; color: var(--ink-2); line-height: 1.6;
+  max-width: 80ch; }
+
+/* Satu baris per satuan kerja. Inilah jawaban "siapa yang belum". */
+.barissatker { display: grid;
+  grid-template-columns: minmax(150px, 1.4fr) minmax(150px, 1.6fr) auto auto;
+  gap: var(--s3); align-items: center; padding: 9px 12px;
+  border: 1px solid var(--rule); border-radius: 6px; background: var(--surface);
+  font-size: 13px; }
+.barissatker + .barissatker { margin-top: 6px; }
+.barissatker b { font-weight: 600; }
+.barissatker .dimana { color: var(--ink-2); }
+
+.angkabaris { display: flex; gap: var(--s5); flex-wrap: wrap; align-items: center;
+  padding: var(--s3) 0 0; border-top: 1px solid var(--rule); }
+.angkabaris > div { display: grid; gap: 2px; }
+.angkabaris b { font-size: 15px; font-weight: 700;
+  font-variant-numeric: tabular-nums; }
+
+@media (max-width: 720px) {
+  .barissatker { grid-template-columns: 1fr; gap: 5px; }
+}
+
+.rincibaris { grid-template-columns: 150px minmax(0, 1fr); }
+.rincibaris dt { font-size: var(--t1); }
+
+.ceklisrapat { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.ceklisrapat > li { display: flex; gap: 8px; align-items: baseline;
+  font-size: var(--t3); color: var(--ink-2); }
+.ceklisrapat > li.ada { color: var(--ink-3); text-decoration: line-through; }
+.ceklisrapat .tik { color: var(--verm); font-weight: 700; flex: none; }
+.ceklisrapat > li.ada .tik { color: var(--stamp); text-decoration: none; }
+
+.barisrinci { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.barisrinci > li { display: flex; gap: 12px; align-items: baseline;
+  font-size: var(--t3); }
+.barisrinci .tgl { flex: none; width: 74px; font-size: var(--t1);
+  color: var(--ink-3); }
+.barisrinci .nilai { display: flex; gap: 8px; align-items: baseline; }
+
+@media (max-width: 700px) {
+  .rincibaris { grid-template-columns: 1fr; }
+  .isilebar { padding: var(--s3); }
+}
+
+/* Catatan yang belum bertanda satuan kerja. Diberi latar sendiri supaya jelas
+   ia bukan bagian tabel di atasnya - tapi tetap di dalam wadah yang sama,
+   karena ia memang tindak lanjut rekomendasi ini juga. */
+.lepasan { padding: var(--s4) var(--s5); border-top: 1px solid var(--rule-2);
+  background: var(--surface-2); }
+
+/* Satu bentuk tindak lanjut di formulir pencatatan. Berbingkai supaya jelas
+   satuan kerja di dalamnya milik bentuk ITU, bukan milik rekomendasinya —
+   tanpa bingkai, dua bentuk berturut-turut terbaca seperti satu daftar
+   panjang. */
+.kotaktindakan { border: 1px solid var(--line); border-radius: var(--r2);
+  background: var(--surface); padding: var(--s4); margin-bottom: 10px; }
+.kepalatindakan { display: flex; align-items: center; gap: 9px;
+  margin-bottom: 10px; }
+
+/* Permintaan perubahan yang belum diputus. Diberi tepi kuningan supaya jelas
+   ia menunggu perbuatan seseorang, bukan catatan yang sudah lewat. */
+.mintaubah { border: 1px solid var(--line); border-radius: var(--r2);
+  padding: var(--s4); margin-bottom: 10px; background: var(--surface); }
+.mintaubah.tunggu { border-color: var(--brass); background: var(--brass-bg); }
+
+/* Formulir tindakan di dalam baris yang dibentangkan. Diberi garis atas supaya
+   jelas ia bagian yang bisa DIKERJAKAN, terpisah dari rincian di atasnya yang
+   cuma dibaca. */
+.panelbaris { padding-top: var(--s4); border-top: 1px solid var(--rule); }
+.panelbaris > .kartu:last-child { margin-bottom: 0; }
+
+/* Lencana kategori berwarna. Warnanya datang dari data master lewat satu
+   peubah, jadi menambah warna baru di sana tidak menuntut aturan baru di sini.
+   Latarnya dibuat tipis dari warna yang sama — bukan warna padat — supaya
+   tulisannya tetap terbaca. */
+.tagkat.dalam.berwarna {
+  /* Cadangan lebih dulu: peramban yang belum kenal color-mix() melewatkan
+     baris di bawahnya dan tetap mendapat lencana yang terbaca. Berkas ini
+     dipakai kantor pemerintahan dengan peramban dan mesin yang beragam, dan
+     lencana yang tulisannya hilang lebih buruk daripada lencana yang tidak
+     berwarna. */
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--ink-2);
+}
+
+@supports (background: color-mix(in srgb, red 10%, transparent)) {
+  .tagkat.dalam.berwarna {
+    background: color-mix(in srgb, var(--w) 12%, transparent);
+    border-color: color-mix(in srgb, var(--w) 40%, transparent);
+    color: color-mix(in srgb, var(--w) 70%, var(--ink));
+  }
+}
+
+/* Data master: satu baris satu kategori, isian namanya dan pemilih warnanya
+   berdampingan. */
+.barisMaster { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.barisMaster > input[type=text] { flex: 1 1 180px; }
+
+.pilihwarna { display: flex; gap: 5px; flex-wrap: wrap; }
+.pilihwarna label { display: block; cursor: pointer; line-height: 0; }
+/* Tombol radionya disembunyikan dari mata, bukan dari papan ketik: yang
+   menyusuri layar dengan Tab tetap sampai ke sini, dan tetap bisa memilih. */
+.pilihwarna input { position: absolute; opacity: 0; width: 0; height: 0; }
+.pilihwarna span { display: block; width: 22px; height: 22px; border-radius: 6px;
+  border: 1px solid var(--line); }
+.pilihwarna input:checked + span { border: 2px solid var(--ink); }
+.pilihwarna input:focus-visible + span { outline: 2px solid var(--aksen);
+  outline-offset: 2px; }
+
+/* Baris yang dinonaktifkan: masih terbaca, tapi jelas tidak berlaku lagi. */
+tr.sepi > td { opacity: .55; }
+
+/* Daftar dokumen yang diminta. Lingkaran keadaannya di kiri, namanya di
+   tengah, tombol tautannya di kanan — dan isiannya baru turun sesudah
+   tombolnya ditekan. */
+.kepalaisi { display: flex; align-items: baseline; gap: 10px;
+  flex-wrap: wrap; margin-bottom: 8px; }
+.kepalaisi > .tanda { margin-left: auto; font-size: var(--t2); color: var(--ink-3); }
+
+.ceklis { list-style: none; margin: 0 0 10px; padding: 0; }
+.ceklis > li { display: flex; gap: 10px; align-items: flex-start;
+  padding: 9px 0; border-bottom: 1px solid var(--rule-2); font-size: var(--t3); }
+.ceklis > li:last-child { border-bottom: 0; }
+.ceklis > li > .isi { flex: 1; min-width: 0; }
+.ceklis .tik { flex: none; color: var(--ink-3); font-weight: 700; line-height: 1.5; }
+.ceklis .tik.ada { color: var(--stamp); }
+.ceklis .sudah { color: var(--ink-3); text-decoration: line-through; }
+
+/* Isian tautan yang tersembunyi sampai tombolnya ditekan. Ringkasannya
+   dipasang sebagai baris nama + tombol; penanda segitiga bawaan peramban
+   dimatikan supaya tidak ada dua penanda untuk satu hal. */
+.tautanbutir > summary { display: flex; align-items: center; gap: 10px;
+  cursor: pointer; list-style: none; }
+.tautanbutir > summary::-webkit-details-marker { display: none; }
+.tautanbutir > summary > .namabutir { flex: 1; min-width: 0; }
+.tautanbutir > summary > .btn { flex: none; }
+.tautanbutir[open] > summary > .btn { background: var(--surface-2); }
+.tautanbutir > .duo { margin-top: 10px; }
+.tautanbutir.lepas > summary { justify-content: flex-start; }
+
+/* Berkas yang berupa tautan ke arsip luar diberi tanda panah keluar — supaya
+   jelas menekannya membawa keluar dari sistem ini. */
+.berkas.tautan::after { content: " 97"; font-size: .9em; opacity: .7; }
+
+/* Jarak pencatatan yang kelewat lama, dan tautan yang belum ada. Keduanya
+   tanda, bukan kesalahan — jadi warnanya jingga, bukan merah. */
+.jedacatat { margin-top: 3px; font-size: var(--t1); font-weight: 600;
+  color: var(--jingga); letter-spacing: 0; white-space: nowrap; }
+/* Yang mustahil bukan sekadar perlu diperhatikan — ia salah. */
+.jedacatat.salah { color: var(--verm); }
+.belumada { color: var(--ink-3); font-style: italic; }
+
+/* ==================================================================
+   RINGKASAN — dua blok status dan dua tabel rekap
+   Mengikuti dasbor pemantauan mereka: tiap keranjang membawa jumlah
+   DAN rupiahnya, susunan yang memang selalu bersebelahan di lembar itu.
+   ================================================================== */
+
+/* Keterangan asal angka, sepadan dengan baris "Sumber data: PTL BPSDM"
+   di kepala lembar mereka. */
+.asalangka { font-size: var(--t2); color: var(--ink-3); margin-bottom: 16px; }
+
+.blokstatus { background: var(--kertas); border: 1px solid var(--rule-2);
+  border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+.kepalablok { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+.kepalablok > h3 { margin: 0; font-size: 14px; font-weight: 650; letter-spacing: -.01em; }
+
+.deretstatus { display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.selstatus { padding: 12px; border-radius: 8px; background: var(--rule-3, #F7F8FA); }
+/* Kolom pertama beda latar: ia penyebutnya, bukan salah satu keranjangnya. */
+.selstatus.utama { box-shadow: inset 0 0 0 1px var(--rule-2); }
+.selstatus > .l { display: flex; align-items: center; gap: 6px; font-size: 11px;
+  color: var(--ink-3); font-weight: 500; min-height: 30px; }
+.selstatus > .l > i { width: 9px; height: 9px; border-radius: 2px; flex: none; display: block; }
+.selstatus > .n { font-size: 26px; font-weight: 700; letter-spacing: -.03em;
+  line-height: 1.15; font-variant-numeric: tabular-nums; }
+.selstatus > .rp { font-size: 12px; color: var(--ink-2); font-weight: 600;
+  font-variant-numeric: tabular-nums; margin-top: 2px; }
+.selstatus > .meter { display: block; height: 4px; border-radius: 2px;
+  background: var(--rule-2); overflow: hidden; margin-top: 8px; }
+.selstatus > .meter > i { display: block; height: 100%; }
+.selstatus > .bg { font-size: 11px; color: var(--ink-3); margin-top: 4px; }
+
+/* Sisa dipisahkan garis: ia jumlah dari keranjang yang belum diakui, bukan
+   keranjang berikutnya. */
+.selstatus.sisa { background: var(--brass-bg); box-shadow: inset 2px 0 0 var(--brass); }
+.selstatus.sisa > .n { font-size: 20px; letter-spacing: -.02em; }
+.selstatus.sisa > .rp { color: var(--ink-3); font-weight: 500; }
+
+/* Penyebut kedua di kaki blok. Diberi garis pemisah supaya tidak terbaca
+   sebagai kolom berikutnya — angkanya menghitung hal yang berbeda. */
+.kakitugas { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--rule-2); }
+.kakitugas > .pita { flex: 1; min-width: 160px; height: 20px; }
+.kakitugas > .ket { font-size: 12px; color: var(--ink-3); }
+
+/* Tabel rekap tetap. Barisnya rapat karena yang dibaca angkanya. */
+.tabelrekap { margin-bottom: 16px; padding: 0; }
+.tabelrekap table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tabelrekap th { padding: 8px 10px; text-align: left; font-weight: 600; font-size: 11px;
+  color: var(--ink-3); border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.tabelrekap th.num, .tabelrekap td.num { text-align: right; }
+.tabelrekap td { padding: 7px 10px; border-bottom: 1px solid var(--rule-2);
+  font-variant-numeric: tabular-nums; }
+.tabelrekap tbody tr:hover { background: var(--rule-3, #F7F8FA); }
+/* Baris jumlah dibedakan tebalnya, bukan warnanya — warnanya sudah dipakai
+   untuk arti lain di seluruh halaman ini. */
+.tabelrekap tfoot td { padding: 9px 10px; font-weight: 700;
+  border-top: 2px solid var(--rule); border-bottom: 0; }
+
+/* Bilah bagian di dalam sel. Angkanya tetap dicetak di atas bilahnya — bilah
+   tanpa angka memaksa mata menaksir, dan yang ditanya orang angkanya. */
+.barbagi { position: relative; display: flex; align-items: center; justify-content: flex-end;
+  min-width: 84px; height: 18px; border-radius: 4px;
+  background: var(--rule-3, #F7F8FA); overflow: hidden; }
+.barbagi > i { position: absolute; left: 0; top: 0; bottom: 0; background: #DBEAFE; }
+.barbagi > b { position: relative; padding: 0 7px; font-size: 11px;
+  font-weight: 600; color: var(--ink-2); }
+
+/* Catatan pembacaan di kaki Ringkasan. Sengaja tidak menonjol: yang
+   membutuhkannya cuma orang yang baru pertama membaca angkanya. */
+.catatanbaca { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--rule-2); }
+.catatanbaca > ul { margin: 8px 0 0; padding-left: 18px; font-size: 12px;
+  color: var(--ink-3); line-height: 1.7; }
+.catatanbaca > ul > li { margin-bottom: 5px; }
+.catatanbaca b { color: var(--ink-2); font-weight: 600; }
