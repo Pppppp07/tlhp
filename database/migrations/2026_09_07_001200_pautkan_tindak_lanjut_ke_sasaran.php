@@ -3,30 +3,21 @@
 use Illuminate\Database\Migrations\Migration;
 
 /**
- * Mengisi `sasaran_id` pada catatan tindak lanjut yang sudah terlanjur ada.
+ * Dulu: mengisi `sasaran_id` pada catatan tindak lanjut yang sudah terlanjur
+ * ada, lewat App\Support\PautkanSasaran.
  *
- * Kolomnya ditambahkan migrasi 000600 tapi tidak pernah diisi. Selama halaman
- * menampilkan catatan sebagai satu daftar panjang per rekomendasi, itu tidak
- * kelihatan; begitu rinciannya pindah ke dalam baris tiap satuan kerja,
- * catatan tanpa pemilik jadi tidak punya tempat berdiri.
+ * Sekarang tidak mengerjakan apa pun. Penyemai menulis `sasaran_id` sejak awal
+ * dan seluruh pengendali menulisnya sendiri, jadi tidak ada lagi catatan tanpa
+ * pemilik yang perlu disambungkan — dan pada basis data yang baru, tabelnya
+ * memang masih kosong saat migrasi ini jalan.
  *
- * Aturannya ada di App\Support\PautkanSasaran, dipakai bersama penyemai supaya
- * data lama dan data baru disambungkan dengan cara yang sama persis.
+ * Berkasnya dipertahankan, bukan dihapus: basis data yang sudah berjalan
+ * mencatat migrasi ini sebagai sudah dijalankan, dan menghapusnya membuat
+ * daftar migrasi keduanya berselisih.
  */
 return new class extends Migration
 {
-    public function up(): void
-    {
-        $hasil = \App\Support\PautkanSasaran::jalankan();
-        foreach ($hasil as $tabel => $n) {
-            echo "  {$tabel}: {$n} baris disambungkan ke sasaran\n";
-        }
-    }
+    public function up(): void {}
 
-    /**
-     * Tidak dibalik. Mengosongkan kembali `sasaran_id` akan menghapus juga
-     * sambungan yang memang sudah benar sejak awal, dan tidak ada catatan mana
-     * yang mana.
-     */
     public function down(): void {}
 };

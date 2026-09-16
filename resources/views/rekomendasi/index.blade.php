@@ -2,178 +2,170 @@
 @section('judul', 'Rekomendasi')
 @section('isi')
 @php
+  use App\Enums\PeranPengguna as P;
+  use App\Enums\SumberLaporan;
   use App\Support\Tampil;
+  use App\Support\TindakLanjutRingkas;
 
-  $urut = request('urut', 'kode');
-  $arah = request('arah', 'naik');
+  $u = auth()->user();
+  $peran = $u->peran;
 
-  $kolom = [
-    'uraian'  => 'Uraian',
-    'satker'  => 'Satuan kerja',
-    'posisi'  => 'Posisi berkas',
-    'tenggat' => 'Tenggat jawab',
-    'status'  => 'Status',
-  ];
-
-  $nilai = [
-    'uraian'  => fn ($r) => mb_strtolower($r->uraian),
-    'satker'  => fn ($r) => mb_strtolower($r->daftarSasaran()->map(fn ($x) => $x->satker?->nama)->filter()->first() ?? '~'),
-    'posisi'  => fn ($r) => $r->posisiTampil()?->tahap() ?? 0,
-    'tenggat' => fn ($r) => optional($r->tenggat_jawab)->timestamp ?? 0,
-    'status'  => fn ($r) => array_search($r->status, \App\Enums\StatusTindakLanjut::cases(), true),
-  ];
-
-  $baris = isset($nilai[$urut])
-    ? ($arah === 'turun' ? $daftar->sortByDesc($nilai[$urut]) : $daftar->sortBy($nilai[$urut]))->values()
-    : $daftar->sortBy('kode')->values();
-
-  /* Tiga keadaan sekali putar: tekan mengurutkan, tekan lagi membalik, sekali
-     lagi kembali ke urutan bawaan. */
-  $tautKolom = function ($k) use ($urut, $arah) {
-      $q = request()->query();
-      if ($urut !== $k)          { $q['urut'] = $k; $q['arah'] = 'naik'; }
-      elseif ($arah === 'naik')  { $q['urut'] = $k; $q['arah'] = 'turun'; }
-      else                       { unset($q['urut'], $q['arah']); }
-      return request()->url() . (($q = http_build_query($q)) ? '?' . $q : '');
-  };
-
-  /* Dua deret keping, persis seperti prototipe: yang atas menyempitkan
-     lingkupnya, yang bawah memilih keranjangnya. */
-  $grup = [
-    [
-      'kunci' => 'jenis', 'aktif' => $jenis, 'label' => 'Jenis laporan',
-      'keping' => [
-        ['teks' => 'Semua', 'nilai' => '', 'jumlah' => $jumlahJenis['']],
-        ['teks' => 'LHP', 'nilai' => 'LHP', 'jumlah' => $jumlahJenis['LHP']],
-        ['teks' => 'LHA', 'nilai' => 'LHA', 'jumlah' => $jumlahJenis['LHA']],
-      ],
-    ],
-    [
-      'kunci' => 'keadaan', 'aktif' => $keadaan, 'label' => 'Keranjang',
-      'keping' => collect($KERANJANG)->map(fn ($k, $kunci) => [
-        'teks' => $k['nama'], 'nilai' => $kunci,
-        'jumlah' => $jumlahKeranjang[$kunci] ?? 0,
-        'pemisah' => $k['pemisah'] ?? false,
-      ])->values()->all(),
-    ],
-  ];
-
-  $pilih = [];
-  if ($daftarSatker->isNotEmpty()) {
-      $pilih[] = ['nama' => 'satker', 'nilai' => $satker,
-        'opsi' => ['' => 'Semua satuan kerja']
-          + $daftarSatker->mapWithKeys(fn ($s) => [$s->id => $s->namaPendek()])->all()];
-  }
-  $pilih[] = ['nama' => 'status', 'nilai' => $status,
-    'opsi' => ['' => 'Semua status']
-      + collect($daftarStatus)->mapWithKeys(fn ($s) => [$s->value => $s->value . ' · ' . $s->nama()])->all()];
+  /* Sekali tekan mengurutkan menurut kolom itu; tekan lagi membalik arahnya;
+     sekali lagi kembali ke urutan bawaan. Nilai tombolnya keadaan berikutnya. */
+  $berikut = fn ($k) => $urut !== $k ? "{$k}:naik" : ($arah === 'naik' ? "{$k}:turun" : 'mendesak');
+  $judulUrut = fn ($k, $nama) => $urut !== $k ? 'Urutkan menurut '.mb_strtolower($nama)
+    : ($arah === 'naik' ? 'Tekan lagi untuk membalik urutannya' : 'Tekan lagi untuk kembali ke urutan bawaan');
 @endphp
 
-@include('bagian.kepala-tabel', [
-  'grup' => $grup,
-  'cari' => $cari,
-  'ph' => 'Cari nomor LHP, kode, temuan, rekomendasi, Ref LHP',
-  'pilih' => $pilih,
-  'tampil' => $daftar->count(),
-  'semua' => $semuaJumlah,
-  'satuan' => 'rekomendasi',
-  'awas' => $perlu ? $perlu . ' lewat tenggat' : null,
-])
+<div class="body">
+  {{-- Seluruh saringan satu formulir GET: alamatnya bisa disimpan dan dibagi,
+       dan semuanya tetap bekerja tanpa skrip. Isian tersembunyi di depan
+       supaya tombol yang ditekan menimpanya. --}}
+  <form id="saring" method="get" action="{{ route('rekomendasi.index') }}" class="kepalatabel">
+    <input type="hidden" name="keadaan" value="{{ $keadaanKini ?? 'semua' }}">
+    <input type="hidden" name="urut" value="{{ $urut === 'mendesak' ? 'mendesak' : $urut.':'.$arah }}">
 
-<div class="tw">
-  <table>
-    <thead>
-      <tr>
-        <th class="num">No</th>
-        @foreach($kolom as $k => $nama)
-          <th @class(['urutkan', 'aktif' => $urut === $k])>
-            <a href="{{ $tautKolom($k) }}">{{ $nama }}
-              <span class="panahurut">{{ $urut === $k ? ($arah === 'naik' ? '↑' : '↓') : '⇅' }}</span>
-            </a>
-          </th>
+    <div class="pilihgrup" role="group" aria-label="Jenis laporan">
+      @foreach(['semua' => 'Semua', 'LHP' => 'LHP', 'LHA' => 'LHA'] as $k => $n)
+        <button type="submit" name="lingkup" value="{{ $k }}" aria-pressed="{{ $lingkup === $k ? 'true' : 'false' }}"
+          title="{{ $k === 'semua' ? 'Kedua jenis laporan sekaligus — dipakai untuk monev' : 'Hanya '.SumberLaporan::from($k)->nama().' dari '.SumberLaporan::from($k)->penerbit() }}">
+          {{ $n }}<span class="n">{{ $jumlahJenis[$k] }}</span>
+        </button>
+      @endforeach
+    </div>
+
+    <div class="pilihgrup" role="group" aria-label="Keadaan pekerjaan">
+      @foreach($keadaanAda as $k => $v)
+        @php $nyala = $keadaanKini === $k; @endphp
+        @if(isset($v['khusus']))<span class="pemisah" aria-hidden="true"></span>@endif
+        {{-- Saklar, bukan pilihan mati: menekan yang menyala melepasnya. --}}
+        <button type="submit" name="keadaan" value="{{ $nyala ? 'semua' : $k }}" aria-pressed="{{ $nyala ? 'true' : 'false' }}"
+          @if($nyala) title="Tekan lagi untuk melihat semuanya" @endif>
+          @isset($v['ikon'])<x-ikon :n="$v['ikon']" :s="13" />@endisset
+          {{ $v['nama'] }}<span class="n">{{ $jumlah[$k] }}</span>
+          @if($nyala)<x-ikon n="X" :s="12" class="lepas" />@endif
+        </button>
+      @endforeach
+    </div>
+
+    <div class="barissaring">
+      <span class="cari" style="flex:1;min-width:220px">
+        <x-ikon n="Search" :s="14" />
+        <input type="text" name="q" value="{{ $q }}" data-saring-langsung
+          placeholder="Cari nomor LHP, kode, temuan, rekomendasi, Ref IDT">
+      </span>
+      {{-- Penyaring satuan kerja tidak diberikan kepada satuan kerja: baginya
+           ia tidak menyaring apa pun, dan isinya membocorkan daftar satuan
+           kerja lain. --}}
+      @if($peran !== P::SATKER)
+        <select name="sk" data-kirim>
+          <option value="semua">Semua satuan kerja</option>
+          @foreach($daftarSatker as $s)
+            <option value="{{ $s->id }}" @selected((string) $sk === (string) $s->id)>{{ $s->namaPendek() }}</option>
+          @endforeach
+        </select>
+      @endif
+      @if($lingkup !== 'LHA')
+        <select name="st" data-kirim title="Rangkuman status BPK dari tindak lanjut tiap satuan kerja. Hanya LHP.">
+          <option value="semua">Semua rangkuman SIPTL</option>
+          @foreach($STATUS as $s)
+            <option value="{{ $s->value }}" @selected($st === $s->value)>{{ $s->value }} · {{ $s->pendek() }}</option>
+          @endforeach
+        </select>
+      @endif
+      <div style="flex:1"></div>
+    </div>
+
+    <div class="hint" data-hitung-tampil>
+      <span data-n-tampil>{{ $hasil->count() }}</span> rekomendasi tampil
+      <b style="color:var(--bad)" @if(! $perlu) hidden @endif data-perlu> · <span data-n-perlu>{{ $perlu }}</span> perlu perhatian</b>
+      @if($hasil->count() !== $daftar->count())<span> · disaring dari {{ $daftar->count() }}</span>@endif
+    </div>
+
+    @if($keadaanKini === 'siptl')
+      <div class="hint">
+        {{ $hasil->filter->perluUnggahSiptl()->count() }} perlu diunggah
+        · {{ $hasil->filter->perluCekBpk()->count() }} menunggu penilaian BPK
+        <x-info :teks="[
+          'Kumpulan pekerjaan yang dikerjakan di SIPTL — aplikasi milik BPK, di luar sistem ini.',
+          'Perlu diunggah: berkasnya diunggah di SIPTL, lalu tanggalnya dicatat di sini.',
+          'Menunggu penilaian BPK: BPK tidak mengirim pemberitahuan apa pun, jadi statusnya dicek berkala di SIPTL lalu dicatat di sini.',
+          'Hanya LHP. LHA berhenti di Inspektorat dan tidak pernah sampai ke BPK.',
+        ]" />
+      </div>
+    @endif
+  </form>
+
+  <div class="tw">
+    <table>
+      <thead>
+        <tr>
+          <th class="num">No</th>
+          @foreach([['uraian', 'Uraian'], ['satker', 'Satuan kerja'], ['tenggat', 'Tenggat jawab'], ['kemajuan', 'Kemajuan', TindakLanjutRingkas::KETERANGAN]] as $kol)
+            @php [$k, $nama] = $kol; $ket = $kol[2] ?? null; @endphp
+            <th class="urutkan{{ $urut === $k ? ' aktif' : '' }}{{ $ket ? ' berinfo' : '' }}">
+              <button type="submit" form="saring" name="urut" value="{{ $berikut($k) }}" title="{{ $judulUrut($k, $nama) }}">
+                {{ $nama }}
+                <span class="panahurut" aria-hidden="true">{{ $urut === $k ? ($arah === 'naik' ? '↑' : '↓') : '⇅' }}</span>
+              </button>
+              @if($ket)<x-info :teks="$ket" />@endif
+            </th>
+          @endforeach
+        </tr>
+      </thead>
+      <tbody>
+        @foreach($hasil as $no => $rek)
+          @php
+            $lap = $rek->temuan->laporan;
+            $lewat = $rek->telatTenggat();
+            $lewatBatas = $rek->hariLewatPerbaikan();
+            $cari = mb_strtolower(implode(' ', [$rek->kode, $rek->temuan->judul, $rek->uraian, $rek->refIdt(),
+              $lap->nomor, $rek->refLhp(), $rek->daftarSasaran()->first()?->satker?->namaPendek()]));
+          @endphp
+          <tr class="bukaan{{ $rek->perluPerhatian() ? ' awas' : '' }}" data-href="{{ route('rekomendasi.show', $rek) }}"
+            data-cari="{{ $cari }}" data-perlu="{{ $rek->perluPerhatian() ? 1 : 0 }}">
+            <td class="num mono" style="font-size:12px;color:var(--ink-3)">
+              <span class="panahbaris"><x-ikon n="ChevronRight" :s="13" /></span>
+              <span data-no>{{ $no + 1 }}</span>
+            </td>
+            <td style="max-width:420px">
+              <div style="display:flex;align-items:baseline;gap:8px;min-width:380px">
+                <x-sumber :j="$lap->sumber" />
+                <a class="tautbaris" href="{{ route('rekomendasi.show', $rek) }}" style="font-size:13px">{{ $rek->uraian }}</a>
+              </div>
+            </td>
+            <td style="font-size:12.5px">
+              <span class="kepingsatker" style="max-width:250px">
+                @foreach($rek->satkerTampil($peran, $u->satker_id) as $s)
+                  <span class="keping">{{ $s->namaPendek() }}</span>
+                @endforeach
+              </span>
+            </td>
+            <td class="mono" style="font-size:12px;color:{{ $lewat ? 'var(--bad)' : 'inherit' }}">
+              {{ Tampil::tgl($rek->tenggat_jawab) }}
+              @if($lewat)
+                <div class="lbl" style="color:var(--bad)">{{ Tampil::lamaTelat($rek->lewatTenggat()) }}</div>
+              @endif
+              @if($lewatBatas > 0)
+                <div class="lbl" style="color:var(--bad)">lewat batas perbaikan {{ $lewatBatas }} hari</div>
+              @endif
+            </td>
+            <td><x-kemajuan :rek="$rek" /></td>
+          </tr>
         @endforeach
-      </tr>
-    </thead>
-    <tbody>
-    @forelse($baris as $i => $r)
-      @php
-        $telat = $r->lewatTenggat();
-        $satkerBaris = $r->daftarSasaran();
-      @endphp
-      @php $ditandai = $tandai === $r->id; @endphp
-      {{-- Sekali klik langsung ke rinciannya, seperti prototipe. Uraiannya
-           sendiri tulisan biasa: kalau ia tautan, seluruh kolom jadi biru
-           bergaris dan mata kehilangan tempat berpijak — padahal yang bisa
-           ditekan justru seluruh barisnya. --}}
-      {{-- Rinciannya dibentangkan di dalam barisnya, bukan dibuka sebagai
-           halaman lain: yang dibandingkan orang adalah baris-baris ini satu
-           sama lain. Yang perlu bertindak menekan "Buka selengkapnya" di
-           dalam rinciannya. --}}
-      <tr @class(['bukaan', 'tandai' => $ditandai, $nada => $ditandai])
-          @if($ditandai) id="r-{{ $r->id }}" @endif
-          data-buka="rk{{ $r->id }}">
-        <td class="num mono" style="font-size:12px;color:var(--ink-3)">
-          <span class="panahbaris"><x-ik nama="panah-kanan" ukuran="13" /></span>
-          {{ $i + 1 }}
-        </td>
-
-        {{-- Lencana jenis laporan ikut di sini bersama hilangnya kolom Kode —
-             ia keterangan atas uraiannya, bukan kolom tersendiri. --}}
-        <td style="max-width:420px">
-          <div style="display:flex;align-items:baseline;gap:8px">
-            <span class="sumber sumber-{{ $r->temuan->laporan->sumber->value }}">{{ $r->temuan->laporan->sumber->value }}</span>
-            <span style="font-size:13px">{{ $r->uraian }}</span>
-          </div>
-          <div class="lbl" style="margin-top:3px">
-            {{ $r->temuan->judul }}
-            &middot; <span class="mono">{{ $r->kode }}</span>
-          </div>
-        </td>
-
-        {{-- Seluruh namanya disebut, bukan diringkas jadi angka. "5 satuan
-             kerja" memaksa membuka barisnya cuma untuk tahu siapa saja. --}}
-        <td style="font-size:12.5px">
-          <span class="kepingsatker">
-            @forelse($satkerBaris as $x)
-              <span class="keping">{{ $x->satker?->namaPendek() }}</span>
-            @empty
-              <span class="lbl">belum ditugaskan</span>
-            @endforelse
-          </span>
-        </td>
-
-        {{-- Langsung unit yang memegangnya. Kalimat lengkapnya tetap ada di
-             gelembung judulnya, jadi tidak ada keterangan yang hilang. --}}
-        <td style="font-size:12.5px" title="{{ $r->posisiTampil()?->label() }}">
-          {{ $r->pemegangTampil() }}
-          @if($satkerBaris->count() > 1)
-            <span class="kepingsatker" style="margin-top:4px">
-              @foreach($r->sebaranPosisi() as $nama => $n)
-                <span class="keping">{{ $nama }} <i>{{ $n }}</i></span>
-              @endforeach
-            </span>
-          @endif
-        </td>
-
-        <td class="mono" style="font-size:12px;@if($telat)color:var(--verm)@endif">
-          {{ Tampil::tgl($r->tenggat_jawab) }}
-          @if($telat)<div class="lbl" style="color:var(--verm)">lewat {{ $telat }} hari</div>@endif
-        </td>
-
-        <td><span class="cap cap-{{ $r->status->value }}">{{ $r->status->value }}</span></td>
-      </tr>
-
-      <tr class="lebar" id="rk{{ $r->id }}">
-        <td colspan="{{ count($kolom) + 1 }}">
-          @include('bagian/rinci-rekomendasi', ['r' => $r])
-        </td>
-      </tr>
-    @empty
-      <tr><td colspan="6" style="color:var(--ink-3);padding:22px">
-        Tidak ada rekomendasi yang cocok. Ubah kata kunci atau saringan.
-      </td></tr>
-    @endforelse
-    </tbody>
-  </table>
+        <tr data-kosong @if($hasil->isNotEmpty()) hidden @endif>
+          <td colspan="5" style="color:var(--ink-3);padding:22px">
+            @if($daftar->isNotEmpty())
+              Tidak ada rekomendasi yang cocok. Ubah kata kunci atau saringan.
+            @elseif($peran === P::SETBA)
+              Belum ada rekomendasi. Rekomendasi muncul di sini sesudah laporannya dicatat lewat Catat laporan baru.
+            @else
+              Belum ada rekomendasi. Rekomendasi muncul di sini sesudah Setba mencatat laporannya.
+            @endif
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 @endsection

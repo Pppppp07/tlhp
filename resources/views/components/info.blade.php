@@ -1,18 +1,12 @@
-@props(['teks'])
+@props(['teks', 'nada' => null])
 
 @php
-  /* Boleh satu kalimat atau beberapa poin. Kalau beberapa, tiap poin berdiri
-     sendiri — keterangan panjang yang dijejalkan jadi satu paragraf tidak ada
-     yang membacanya sampai habis. */
-  $poin = is_array($teks) ? $teks : [$teks];
-  $penuh = implode(' ', $poin);
+  /* Keterangan yang perlu tersedia tapi tidak perlu dibaca berulang. Boleh
+     satu kalimat atau beberapa poin; beberapa poin digelar satu per baris. */
+  $poin = is_array($teks) ? array_values(array_filter($teks)) : [$teks];
 @endphp
 
 {{-- `title` bukan hiasan: kalau JavaScript mati, itulah satu-satunya cara isi
-     keterangan ini tetap bisa dibaca. --}}
-<span class="infoikon">
-  <button type="button" title="{{ $penuh }}" aria-label="Keterangan">!</button>
-  <span class="isi" role="note">
-    @foreach($poin as $p)<span>{{ $p }}</span>@endforeach
-  </span>
-</span>
+     keterangan ini tetap bisa dibaca. Arah membukanya dihitung skrip saat
+     ditekan (kelas `atas` dan `kiri`). --}}
+<span class="info{{ $nada ? ' '.$nada : '' }}"><button type="button" title="{{ implode(' ', $poin) }}" aria-label="Keterangan" aria-expanded="false">!</button><span class="isi" role="note" hidden>@if(is_array($teks))<span class="poin">@foreach($poin as $p)<span>{{ $p }}</span>@endforeach</span>@else{{ $teks }}@endif</span></span>

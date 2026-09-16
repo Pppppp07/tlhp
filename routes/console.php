@@ -1,8 +1,8 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
+/* Draf tanggapan yang mengendap seminggu dan kewajibannya sudah tuntas dikirim
+   sendiri ke Setba, tiap malam. Jalankan `php artisan schedule:work` (atau cron
+   `schedule:run`) supaya ini berjalan. */
+Schedule::command('tlhp:kirim-draf')->dailyAt('00:30');

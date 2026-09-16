@@ -5,19 +5,23 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Catatan bahwa berkas pernah dikembalikan ke satuan kerja, berikut alasannya.
- * Dicatat tersendiri supaya alasannya terbaca di tempat orang mencarinya, bukan
- * terkubur di satu baris rekam jejak.
+ * Arsip satu pengiriman ulang untuk pemberkasan ulang.
+ *
+ * Yang mengirim selalu Setba; `dari` menyebut siapa yang menolak — UKI,
+ * Inspektorat, atau BPK. Keadaan yang sedang berlaku ada di baris
+ * penugasannya (`sasarans.alasan_perbaikan` dan kawan-kawan) dan dikosongkan
+ * saat perbaikannya dikirim; yang di sini tidak pernah dikosongkan.
  */
 class Pengembalian extends Model
 {
     protected $table = 'pengembalians';
 
     protected $fillable = [
-        'rekomendasi_id', 'sasaran_id', 'tanggal', 'oleh_id', 'label_oleh', 'alasan',
+        'rekomendasi_id', 'sasaran_id', 'tanggal', 'oleh_id', 'label_oleh', 'dari', 'alasan',
+        'batas_waktu', 'keterangan_setba', 'dokumen', 'aksi_id',
     ];
 
-    protected $casts = ['tanggal' => 'date'];
+    protected $casts = ['tanggal' => 'date', 'batas_waktu' => 'date', 'dokumen' => 'array'];
 
     public function rekomendasi() { return $this->belongsTo(Rekomendasi::class); }
     public function sasaran()     { return $this->belongsTo(Sasaran::class); }

@@ -1,143 +1,134 @@
 @php
-  use App\Support\Tampil;
   use App\Enums\SumberLaporan;
+  use App\Support\Tampil;
 
+  /* Langkah 3 — tinjau. Yang dibaca di sini persis yang akan tersimpan: tiap
+     tindak lanjut, siapa yang memikulnya, dan catatannya. */
+  $s = $d['surat'];
   $sumber = SumberLaporan::from($s['sumber']);
-  $tenggat = $s['tgl_terima']
-    ? \App\Models\Rekomendasi::hitungTenggat(\Carbon\Carbon::parse($s['tgl_terima']), $sumber)
-    : null;
-
-  $namaSatker = $satker->keyBy('id');
-  $namaKategori = $kategori->keyBy('id');
-  $namaIntern = $intern->keyBy('id');
-  $namaBentuk = $bentuk->keyBy('id');
-  $namaSifat = $sifat->keyBy('id');
+  $administratif = $sifat->firstWhere('nama', 'Administratif')?->id;
+  $nama = fn ($id) => $satker->firstWhere('id', (int) $id)?->namaPendek() ?? '—';
+  $semuaSatker = collect($d['temuan'])->flatMap(fn ($t) => $t['satker'])->unique();
 @endphp
 
-{{-- Langkah terakhir: yang dibaca ulang sebelum dikirim. Tidak ada isian di
-     sini — semuanya sudah terisi, tinggal dipastikan. --}}
-<div class="kartu" style="margin-bottom:16px">
-  <div class="judulkartu">
-    <span class="ic-kotak"><x-ik nama="berkas-teks" ukuran="17" /></span>
-    <h3>Surat laporan</h3>
-    <div style="flex:1"></div>
-    <form method="post" action="{{ route('laporan.baru.langkah', 1) }}">@csrf
-      <button class="btn btn-s" type="submit">Ubah</button>
-    </form>
+<div class="card" style="margin-bottom:14px">
+  <div style="display:flex;gap:9px;align-items:center;margin-bottom:12px">
+    <x-sumber :j="$s['sumber']" />
+    <span class="mono" style="font-size:12px">{{ $s['nomor'] }}</span>
   </div>
-  <dl class="kv">
-    <dt>Sumber</dt><dd>{{ $sumber->nama() }}</dd>
-    <dt>Nomor surat</dt><dd class="mono">{{ $s['nomor'] }}</dd>
-    <dt>Tanggal surat</dt><dd class="mono">{{ Tampil::tgl($s['tgl_surat']) }}</dd>
-    <dt>Diterima Setba</dt><dd class="mono">{{ Tampil::tgl($s['tgl_terima']) }}</dd>
-    <dt>Tenggat jawaban</dt>
-    <dd class="mono">{{ $tenggat ? Tampil::tgl($tenggat) : '—' }}
-      <div class="lbl" style="margin-top:2px">
-        {{ $sumber->hariTenggat() }} {{ $sumber->pakaiHariKerja() ? 'hari kerja' : 'hari kalender' }}
-        &middot; dasar {{ $sumber->dasarHukum() }}
-      </div>
-    </dd>
-  </dl>
-</div>
-
-<div class="judulkartu" style="margin-bottom:12px">
-  <span class="ic-kotak hijau"><x-ik nama="papan-cek" ukuran="17" /></span>
-  <h3>Isi laporan</h3>
-  <div style="flex:1"></div>
-  <form method="post" action="{{ route('laporan.baru.langkah', 2) }}">@csrf
-    <button class="btn btn-s" type="submit">Ubah</button>
-  </form>
+  <div class="duo">
+    <x-meta label="Sumber">{{ $sumber->nama() }} — {{ $sumber->penerbit() }}</x-meta>
+    <x-meta label="Tanggal surat">{{ Tampil::tgl($s['tgl_surat']) }}</x-meta>
+    <x-meta label="Diterima">{{ Tampil::tgl($s['tgl_terima']) }}</x-meta>
+    <x-meta label="Satuan kerja terperiksa">{{ $semuaSatker->map($nama)->join(', ') ?: '—' }}</x-meta>
+  </div>
 </div>
 
 @foreach($d['temuan'] as $i => $t)
-  <div class="kartu" style="margin-bottom:12px">
-    <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:6px">
-      <span class="mono" style="font-weight:700">{{ $i + 1 }}</span>
-      <b style="font-size:14px;font-weight:600">{{ $t['judul'] }}</b>
-    </div>
-    <div class="lbl" style="margin-bottom:12px">
-      @if($t['nomor_pada_surat']) butir {{ $t['nomor_pada_surat'] }} &middot; @endif
-      {{ collect((array) $t['satker'])->map(fn ($id) => $namaSatker[$id]->namaPendek() ?? null)->filter()->join(', ') ?: '—' }}
-      &middot; {{ $namaKategori[$t['kategori']]->nama ?? '—' }}
-      @if($t['kategori_intern']) &middot; {{ $namaIntern[$t['kategori_intern']]->nama ?? '' }} @endif
-      &middot; nilai {{ Tampil::rupiah((int) preg_replace('/\D/', '', (string) $t['nilai'])) }}
+  <div class="temblok">
+    <div class="kep">
+      <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:4px">
+        <span class="mono" style="font-size:15px;font-weight:700;color:var(--brass)">{{ $i + 1 }}</span>
+        <span class="lbl" style="color:var(--brass)">
+          butir {{ $t['nomor'] ?: '—' }} ·
+          {{ $kategori->firstWhere('id', (int) $t['kategori'])?->nama ?: 'kategori belum dipilih' }}
+        </span>
+        <div style="flex:1"></div>
+        <span class="lbl" style="color:{{ $form->temOk($t) ? 'var(--stamp)' : 'var(--verm)' }}">
+          {{ $form->temOk($t) ? 'lengkap' : 'belum lengkap' }}
+        </span>
+      </div>
+      <div style="font-size:14px;font-weight:600;color:var(--brass)">{{ $t['judul'] ?: 'tanpa judul' }}</div>
+      <div class="lbl" style="margin-top:4px;color:var(--brass);opacity:.85">
+        kategori internal {{ $intern->firstWhere('id', (int) $t['intern'])?->nama ?: '—' }} ·
+        nilai temuan {{ Tampil::rupiah($form->nilaiTem($t)) }} ·
+        {{ count($t['rekom']) }} rekomendasi
+      </div>
     </div>
 
-    <div class="unsur" style="margin-bottom:12px">
-      @if($t['sebab'])<div><div class="lbl">Sebab</div><p>{{ $t['sebab'] }}</p></div>@endif
-      @if($t['akibat'])<div><div class="lbl">Akibat</div><p>{{ $t['akibat'] }}</p></div>@endif
-    </div>
+    <div class="isi">
+      <div class="unsur">
+        <div class="lbl" style="margin-bottom:4px">Sebab</div>
+        <div style="font-size:13px">{{ $t['sebab'] ?: '—' }}</div>
+      </div>
+      <div class="unsur">
+        <div class="lbl" style="margin-bottom:4px">Akibat</div>
+        <div style="font-size:13px">{{ $t['akibat'] ?: '—' }}</div>
+      </div>
 
-    @foreach($t['rekom'] as $j => $r)
-      @php
-        $tindakan = collect($r['tindakan'] ?? [])
-          ->map(fn ($tk) => [
-            'bentuk' => $tk['bentuk'] ?? '',
-            'tgl' => $tk['tgl_renaksi'] ?? '',
-            'baris' => collect($tk['sasaran'] ?? [])->filter(fn ($x) => filled($x['satker'] ?? null)),
-          ]);
-        $pulih = $tindakan->sum(fn ($tk) => $tk['baris']
-          ->sum(fn ($x) => (int) preg_replace('/\D/', '', (string) ($x['nilai'] ?? ''))));
-      @endphp
-      <div style="background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r1);
-        padding:11px 13px;margin-bottom:8px">
-        <div style="display:flex;gap:9px;align-items:baseline;flex-wrap:wrap;margin-bottom:5px">
-          <span class="mono" style="font-weight:700">{{ $i + 1 }}.{{ $j + 1 }}</span>
-          @if($r['sifat'] ?? null)
-            <span class="lbl">{{ $namaSifat[$r['sifat']]->nama ?? '' }}</span>
-          @endif
-        </div>
-        <div style="font-size:13px;line-height:1.5">{{ $r['uraian'] }}</div>
+      <div class="lbl" style="margin:18px 0 9px;display:flex;align-items:center;gap:8px">
+        <x-ikon n="CircleDot" :s="12" /> Rekomendasi · tiap baris jadi satu penugasan tersendiri
+      </div>
 
-        {{-- Satu blok satu bentuk tindak lanjut, berikut satuan kerjanya:
-             begitulah ia akan berdiri di sistem, dan begitu pula yang dilihat
-             masing-masing satuan kerja di layarnya sendiri. --}}
-        @foreach($tindakan as $tk)
-          <div style="margin-top:8px">
-            <div class="lbl" style="margin-bottom:4px">
-              {{ $namaBentuk[$tk['bentuk']]->nama ?? 'bentuk belum dipilih' }}
-              @if($tk['tgl'])
-                &middot; rencana aksi {{ Tampil::tgl($tk['tgl']) }}
+      @foreach($t['rekom'] as $j => $r)
+        @php
+          $nilai = $form->nilaiRek($r);
+          $tgl = collect($r['tindakan'])->pluck('tgl_renaksi')->filter()->sort()->values();
+          $tgt = collect($r['tindakan'])->pluck('target')->filter()->sort()->values();
+        @endphp
+        <div class="rekbaris" style="cursor:default">
+          <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+            {{-- Nomornya Ref LHP, sama dengan yang tersimpan. --}}
+            <span class="mono" style="font-size:11.5px;font-weight:700">
+              {{ trim($r['ref_lhp']) ?: ($t['nomor'] ?: $i + 1).'.'.$form->huruf($j) }}
+            </span>
+            <span class="lbl">{{ $sifat->firstWhere('id', (int) $r['sifat'])?->nama ?: '—' }}</span>
+            <div style="flex:1"></div>
+            <span class="lbl" style="color:{{ $form->rekOk($r) ? 'var(--stamp)' : 'var(--verm)' }}">
+              {{ $form->rekOk($r) ? 'lengkap' : 'belum lengkap' }}
+            </span>
+          </div>
+
+          <div style="font-size:13px;margin-bottom:9px">
+            {{ $r['uraian'] ?: '' }}
+            @if(! $r['uraian'])<span style="color:var(--verm)">uraian belum diisi</span>@endif
+          </div>
+
+          <div class="trio" style="border-top:1px solid var(--rule-2);padding-top:9px">
+            <x-meta label="Penugasan">
+              @if($form->barisRek($r))
+                {{ $form->barisRek($r) }} penugasan · {{ count($r['tindakan']) }} tindak lanjut
+              @else
+                <span style="color:var(--verm)">belum ada</span>
+              @endif
+            </x-meta>
+            <x-meta label="Rencana aksi"><span class="mono">{{ Tampil::tgl($tgl->first()) }}</span></x-meta>
+            <x-meta label="Target penyelesaian">
+              <span class="mono">{{ $tgt->last() ? Tampil::tgl($tgt->last()) : 'tidak ditetapkan' }}</span>
+            </x-meta>
+            <x-meta label="Nilai yang dipulihkan">
+              <span class="mono">{{ $nilai ? Tampil::rupiah($nilai) : '—' }}</span>
+            </x-meta>
+          </div>
+
+          {{-- SELURUH tindak lanjutnya, bukan cuma yang pertama: tindak lanjut
+               kedua, siapa yang memikulnya, dan catatannya harus terbaca
+               sebelum laporannya terkirim, bukan sesudah. --}}
+          @foreach($r['tindakan'] as $k => $tk)
+            @php $dok = collect($tk['dokumen'])->filter(fn ($x) => trim($x) !== ''); @endphp
+            <div style="border-top:1px solid var(--rule-2);padding-top:9px;margin-top:2px">
+              <div class="lbl" style="margin-bottom:4px">
+                Tindak lanjut {{ $k + 1 }} · {{ $tk['bentuk'] ?: 'bentuk belum diisi' }}
+              </div>
+              <div style="font-size:12.5px">
+                @if(count($tk['satker']))
+                  {{ collect($tk['satker'])->map(fn ($x) => $nama($x['satker'])
+                    .((int) $x['nilai'] > 0 ? ' ('.Tampil::rupiah((int) $x['nilai']).')' : ''))->join(' · ') }}
+                @else
+                  <span style="color:var(--verm)">satuan kerja belum dipilih</span>
+                @endif
+              </div>
+              <div class="lbl" style="margin-top:3px">
+                rencana aksi {{ $tk['tgl_renaksi'] ? Tampil::tgl($tk['tgl_renaksi']) : 'belum diisi' }}
+                · {{ $dok->count() ? $dok->count().' dokumen diminta' : 'tanpa dokumen diminta' }}
+              </div>
+              @if(trim($tk['catatan']))
+                <div style="font-size:12.5px;margin-top:4px">{{ $tk['catatan'] }}</div>
               @endif
             </div>
-            @forelse($tk['baris'] as $x)
-              @php $n = (int) preg_replace('/\D/', '', (string) ($x['nilai'] ?? '')); @endphp
-              <span class="keping">
-                {{ $namaSatker[$x['satker']]->namaPendek() ?? '—' }}
-                @if($n)<b>{{ Tampil::rupiahSingkat($n) }}</b>@endif
-              </span>
-            @empty
-              <span class="lbl" style="color:var(--verm)">belum ditujukan ke satuan kerja mana pun</span>
-            @endforelse
-          </div>
-        @endforeach
-
-        @if($pulih)
-          <div class="lbl" style="margin-top:6px">total {{ Tampil::rupiah($pulih) }}</div>
-        @endif
-      </div>
-    @endforeach
+          @endforeach
+        </div>
+      @endforeach
+    </div>
   </div>
 @endforeach
-
-<div class="pesan info">
-  Begitu diajukan, seluruh rekomendasi langsung berpindah ke satuan kerjanya masing-masing
-  dengan status <b>BT &middot; belum ditindaklanjuti</b>, dan tenggat jawabannya mulai berjalan.
-  Nomor surat tidak bisa diubah lagi sesudah ini.
-</div>
-
-<div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
-  <form method="post" action="{{ route('laporan.baru.langkah', 2) }}">@csrf
-    <button class="btn" type="submit"><x-ik nama="panah-kiri" ukuran="15" /> Sebelumnya</button>
-  </form>
-  <form method="post" action="{{ route('laporan.baru.ajukan') }}">
-    @csrf
-    <button class="btn btn-p" type="submit">
-      Ajukan laporan
-    </button>
-  </form>
-  <span class="hint">
-    {{ $kurang2 ?: count($d['temuan']) . ' temuan, ' .
-       collect($d['temuan'])->sum(fn ($t) => count($t['rekom'])) . ' rekomendasi' }}
-  </span>
-</div>

@@ -49,8 +49,14 @@ enum SumberLaporan: string
     public function dasarHukum(): string
     {
         return match ($this) {
-            self::LHA => 'Ketentuan pengawasan intern',
+            self::LHA => 'ketentuan pengawasan intern',
             self::LHP => 'UU 15/2004 Pasal 20',
         };
+    }
+
+    /** Satuan hitungan tenggatnya — LHA memakai hari kerja, LHP hari kalender. */
+    public function satuanTenggat(): string
+    {
+        return $this->pakaiHariKerja() ? 'hari kerja' : 'hari kalender';
     }
 }

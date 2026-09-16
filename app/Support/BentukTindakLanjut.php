@@ -3,25 +3,55 @@
 namespace App\Support;
 
 /**
- * Delapan bentuk tindak lanjut menurut SOP, ditambah satu penampung.
+ * Enam belas bentuk tindak lanjut, beserta dokumen yang lazim diminta.
  *
  * Daftar ini satu-satunya sumbernya: dipakai penyemai untuk basis data baru dan
  * migrasi untuk basis data yang sudah berjalan, supaya keduanya tidak pernah
- * berselisih. Namanya sama persis dengan prototipe — nama bentuk ikut tercetak
- * di surat dan dipakai berkoordinasi, jadi dua sebutan untuk hal yang sama
- * berarti dua istilah yang harus dihafal.
+ * berselisih. Namanya dan urutannya sama persis dengan prototipe (`BENTUK_TL`,
+ * `USUL_DOKUMEN`) — diambil dari 38 nilai berbeda di kolom bentuk tindak
+ * lanjut lembar pemantauan, dari "Surat teguran" sampai "bukti inventarisasi".
  *
- * Tiap bentuk membawa usulan dokumen buktinya. Usulan, bukan paksaan: peminta
- * tetap bisa mengubah, menghapus, atau menambah barisnya. Gunanya menghemat
- * pengetikan dan menyeragamkan penamaan — dokumen yang sama disebut dengan nama
- * yang sama di semua berkas, supaya setahun kemudian masih bisa dicari.
+ * Usulan dokumen hanya usulan: Setba tetap bisa mengubah daftarnya di
+ * formulir. Tujuh bentuk dulu tanpa usulan sama sekali, dan satuan kerja
+ * menerima nol syarat — ketahuan saat simulasi prototipe.
  */
 class BentukTindakLanjut
 {
-    /** @return array<string,list<string>> nama bentuk => usulan dokumennya */
+    /** @return array<string, list<string>> nama bentuk => usulan dokumen */
     public static function peta(): array
     {
         return [
+            'Surat teguran' => [
+                'Surat teguran bernomor',
+                'Tanda terima oleh yang bersangkutan',
+            ],
+            'Bukti setor ke kas negara' => [
+                'Bukti setor ke kas negara (SSBP)',
+                'Nota Konfirmasi KPPN',
+                'Rekapitulasi nilai yang disetor',
+            ],
+            'Surat instruksi' => [
+                'Surat instruksi bernomor',
+                'Bukti penyampaian kepada pelaksana',
+            ],
+            'Sosialisasi' => [
+                'Undangan sosialisasi',
+                'Daftar hadir',
+                'Materi sosialisasi',
+            ],
+            'Sanksi administratif atau teguran tertulis' => [
+                'Surat keputusan atau surat teguran bernomor',
+                'Tanda terima oleh yang bersangkutan',
+            ],
+            'Pengamanan aset' => [
+                'Berita acara pengamanan aset',
+                'Foto kondisi aset',
+                'Bukti pencatatan pada aplikasi BMN',
+            ],
+            'Bukti inventarisasi dan penatausahaan BMN' => [
+                'Laporan hasil inventarisasi BMN',
+                'Berita acara rekonsiliasi BMN',
+            ],
             'Penyetoran ke kas negara' => [
                 'Bukti setor ke kas negara (SSBP)',
                 'Nota Konfirmasi KPPN',
@@ -68,7 +98,7 @@ class BentukTindakLanjut
         ];
     }
 
-    /** Nama bentuknya saja, urut sesuai SOP. @return list<string> */
+    /** Nama bentuknya saja, urut sesuai prototipe. @return list<string> */
     public static function nama(): array
     {
         return array_keys(self::peta());

@@ -1,0 +1,67 @@
+/* ==================================================================
+   ATURAN KHUSUS LARAVEL
+
+   simtlhp.css disalin utuh dari prototipe. Yang di sini hanya yang tidak
+   ada padanannya di sana: tombol yang di sini berupa tautan, formulir
+   masuk, pesan hasil kiriman, dan keterangan yang disembunyikan atribut
+   `hidden` sampai skrip membukanya.
+   ================================================================== */
+
+[hidden]{display:none !important;}
+
+/* Sama dengan index.html prototipe. */
+html,body{height:100%;margin:0;}
+
+/* Tautan yang tampil sebagai tombol atau baris. Prototipe memakai <button>
+   untuk semuanya; di sini yang berpindah halaman berupa tautan, supaya bisa
+   dibuka di tab baru dan tetap berfungsi tanpa skrip. */
+a.menu,a.btn,a.row,a.lonceng,a.berkas,a.item,a.taut,a.blokjudul,a.tujuan,a.tautrek{text-decoration:none;}
+a.menu,a.row,a.lonceng,a.item,a.tautrek{color:inherit;}
+a.berkas{color:inherit;}
+.tautbaris{color:inherit;text-decoration:none;}
+.tautbaris:hover{color:inherit;}
+.pengguna{cursor:default;}
+
+/* Kaki menu: siapa yang sedang masuk, dan tombol keluar. */
+.nav .peran .akunmasuk{display:grid;gap:6px;font-size:var(--t3);}
+.nav .peran .akunmasuk b{font-weight:600;color:var(--ink);line-height:1.35;}
+.nav .peran .akunmasuk span{display:flex;align-items:center;gap:5px;color:var(--ink-2);font-size:var(--t2);}
+.nav .peran .akunmasuk form{margin:2px 0 0;}
+@media (max-width:1120px){
+  .nav .peran .akunmasuk b,.nav .peran .akunmasuk span{display:none;}
+  .nav .peran .akunmasuk .btn{width:100%;padding:6px 4px;font-size:10px;}
+}
+
+/* Pesan hasil kiriman formulir, di atas isi halaman. */
+.pesanbingkai{padding-bottom:0 !important;}
+.pesanbingkai .pesan{margin:0;}
+
+/* ================= halaman masuk ================= */
+.masuk{margin:auto;width:100%;max-width:440px;padding:40px 20px;}
+.masuk .kotak{background:var(--surface);border:1px solid var(--line);border-radius:var(--r2);
+  padding:28px;box-shadow:var(--bayang);}
+.masuk h1{margin:0 0 4px;font-size:19px;font-weight:700;letter-spacing:-.01em;}
+.masuk .sub{color:var(--ink-3);font-size:13px;margin:0 0 22px;}
+.masuk .akun{display:grid;gap:6px;margin-top:10px;max-height:360px;overflow-y:auto;}
+.masuk .akun button{display:flex;justify-content:space-between;gap:10px;text-align:left;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r1);padding:8px 11px;font-size:13px;}
+.masuk .akun button:hover{border-color:var(--aksen-line);background:var(--aksen-bg);}
+
+/* ================= keping pemilih satuan kerja ================= */
+/* Padanan `KepingSatker` prototipe. Di sana warnanya ditulis lewat gaya sebaris
+   dengan nama peubah yang tidak pernah ada (--accent, --accent-soft), jadi
+   keping yang terpilih kehilangan latarnya dan tanda centangnya — putih di atas
+   putih — ikut tak terlihat. Di sini dipakai peubah yang benar, jadi yang
+   terpilih memang terlihat terpilih. */
+.kepingpilih{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;
+  border-radius:999px;cursor:pointer;font-size:12.5px;font-weight:500;text-align:left;
+  border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);}
+.kepingpilih > input{position:absolute;opacity:0;width:0;height:0;}
+.kepingpilih > .kotak{width:13px;height:13px;border-radius:3px;flex:none;
+  display:grid;place-items:center;border:1.5px solid var(--line);
+  background:transparent;color:transparent;}
+.kepingpilih:hover{border-color:var(--aksen-line);}
+.kepingpilih:has(input:checked){border-color:var(--aksen);background:var(--aksen-bg);
+  color:var(--aksen);font-weight:700;}
+.kepingpilih:has(input:checked) > .kotak{border-color:var(--aksen);background:var(--aksen);color:#fff;}
+.kepingpilih:has(input:focus-visible){outline:2px solid var(--aksen);outline-offset:2px;}

@@ -45,14 +45,17 @@ class KosongkanData extends Command
         'item_permintaans',
         'permintaan_dokumens',
         'pemulihans',
+        'tolakan_bpks',
         'pengembalians',
         'tindak_lanjuts',
+        'draf_tanggapans',
         'telaahs',
         'surats',
-        'permintaan_ubahs',
         'keputusan_verifikasis',
         'verifikasis',
+        'riwayat_statuses',
         'notifikasi_bacas',
+        'notifikasi_satker',
         'notifikasis',
         'riwayat_berkas',
         'lampirans',
@@ -62,6 +65,9 @@ class KosongkanData extends Command
         'temuan_satker',
         'temuans',
         'laporans',
+        /* Draf formulir Catat laporan baru menunjuk akun, bukan laporan — tapi
+           isinya data contoh juga, jadi ikut dikosongkan. */
+        'draf_laporans',
     ];
 
     /** Akun lebih dulu: ia menunjuk satuan kerja. */

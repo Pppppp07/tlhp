@@ -9,18 +9,20 @@ use Illuminate\Database\Eloquent\Model;
  *
  * Satu rekomendasi bisa menuntut lebih dari satu bentuk — menyetor ke kas
  * negara dan sekaligus memperbaiki dokumen administrasinya — dan tiap bentuk
- * bisa dibebankan ke satuan kerja yang berbeda.
+ * bisa dibebankan ke satuan kerja yang berbeda, dengan rencana aksi, catatan
+ * Setba, dan daftar dokumennya sendiri.
  */
 class Tindakan extends Model
 {
     protected $fillable = [
         'rekomendasi_id', 'bentuk_id', 'urutan',
-        'tgl_renaksi', 'target_selesai', 'catatan',
+        'tgl_renaksi', 'target_selesai', 'catatan', 'dokumen',
     ];
 
     protected $casts = [
         'tgl_renaksi'    => 'date',
         'target_selesai' => 'date',
+        'dokumen'        => 'array',
     ];
 
     public function rekomendasi() { return $this->belongsTo(Rekomendasi::class); }
@@ -28,10 +30,8 @@ class Tindakan extends Model
     public function sasaran()     { return $this->hasMany(Sasaran::class)->orderBy('id'); }
 
     /**
-     * Rencana aksi yang berlaku untuk bentuk tindak lanjut ini.
-     *
-     * Kosong berarti ikut tanggal rekomendasinya — dasar hukumnya memang
-     * melekat di sana, dihitung dari tanggal laporan diterima.
+     * Rencana aksi yang berlaku untuk bentuk tindak lanjut ini. Kosong berarti
+     * ikut tanggal rekomendasinya.
      */
     public function renaksi(): ?\Carbon\CarbonInterface
     {

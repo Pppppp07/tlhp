@@ -46,4 +46,18 @@ enum HasilTelaah: string
     {
         return $this === self::M ? 'cap-ss' : 'cap-bs';
     }
+
+    /**
+     * Singkatannya ikut sebutannya: LHP M / BM, LHA S / BS. Sesuai disingkat
+     * "S", bukan "SS" — dua huruf itu milik BPK dan di sana berarti "Sudah
+     * sesuai", kalimat yang berbeda dari putusan Itjen atas LHA.
+     */
+    public function kode(?SumberLaporan $sumber = null): string
+    {
+        if ($sumber === SumberLaporan::LHA) {
+            return $this === self::M ? 'S' : 'BS';
+        }
+
+        return $this->value;
+    }
 }

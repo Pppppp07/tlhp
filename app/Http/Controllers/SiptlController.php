@@ -2,70 +2,93 @@
 
 namespace App\Http\Controllers;
 
+use App\Aksi\UrusanSiptl;
 use App\Enums\PeranPengguna;
-use App\Enums\PosisiBerkas;
 use App\Enums\StatusTindakLanjut;
 use App\Models\Rekomendasi;
+use App\Models\Sasaran;
 use Illuminate\Http\Request;
 
 /**
- * Satu layar untuk seluruh urusan SIPTL.
- *
- * Kata Hizkia: "mengapa tidak dibuat semacam Page atau filter, atau section,
- * atau bagian terpisah terkait update status Laporan berdasarkan hasil Laporan
- * SIPTL, jadi semuanya akan muncul disitu mau itu Input Tanggal Upload laporan
- * ke SIPTL atau Update status Laporan berdasarkan SIPTL."
- *
- * Dua pekerjaan yang selalu dikerjakan berurutan dan hanya oleh Setba:
- *
- *   1. mengunggah berkas ke SIPTL, lalu mencatat tanda terimanya
- *   2. membuka SIPTL beberapa waktu kemudian, membaca statusnya, menyalinnya
- *
- * Sebelum ini keduanya tersebar di halaman rincian tiap rekomendasi — Setba
- * harus membuka satu per satu untuk tahu mana yang perlu diunggah, padahal
- * pekerjaannya justru borongan: satu sesi membuka SIPTL, banyak berkas.
- *
- * Jalur LHA tidak pernah sampai di sini.
+ * Urusan SIPTL per satuan kerja, milik Setba. Hanya jalur LHP — LHA berhenti
+ * di Inspektorat dan tidak pernah sampai ke BPK.
  */
 class SiptlController extends Controller
 {
-    public function __invoke(Request $req)
+    private function jaga(Sasaran $s): Rekomendasi
     {
-        abort_unless(in_array(auth()->user()->peran,
-            [PeranPengguna::SETBA, PeranPengguna::PIMPINAN, PeranPengguna::ADMIN], true), 403,
-            'Urusan SIPTL dikerjakan Sekretariat Badan.');
+        abort_unless(auth()->user()->peran === PeranPengguna::SETBA, 403);
+        $rek = $s->tindakan->rekomendasi->load('temuan.laporan');
+        abort_unless($rek->jenis()->melewatiSiptl(), 422, 'Laporan ini tidak melewati SIPTL.');
+        abort_unless($s->tuntas(), 422, 'Tindak lanjut ini belum selesai diperiksa.');
+        $s->load('satker', 'tindakan');
 
-        $muat = ['temuan.laporan', 'sasaran.satker', 'keputusan.verifikasi'];
+        return $rek;
+    }
 
-        /* Tiga keranjang, berurutan seperti pekerjaannya sendiri. Yang sudah
-           ditetapkan ikut ditampilkan supaya Setba bisa memeriksa kembali apa
-           yang pernah dicatatnya — bukan untuk dikerjakan. */
-        $siapUnggah = Rekomendasi::with($muat)
-            ->where('posisi', PosisiBerkas::SIPTL->value)->orderBy('kode')->get();
+    /**
+     * Tanggal unggah dikunci sekali tercatat. Ditolak SEBELUM menyentuh apa pun
+     * kalau barisnya sudah naik — riwayat dan kabar yang terlanjur tercatat
+     * justru jadi bahan manipulasi.
+     */
+    public function unggah(Request $req, Sasaran $sasaran)
+    {
+        $rek = $this->jaga($sasaran);
+        abort_if((bool) $sasaran->siptl_tanggal, 422, 'Tanggal unggah SIPTL sudah tercatat dan dikunci.');
 
-        $menunggu = Rekomendasi::with($muat)
-            ->where('posisi', PosisiBerkas::BPK->value)->orderBy('siptl_tanggal')->get();
-
-        $sudah = Rekomendasi::with($muat)
-            ->whereNotNull('siptl_status')
-            ->orderByDesc('siptl_dicatat_pada')->take(25)->get();
-
-        /* Yang seluruh satuan kerjanya sudah tuntas tapi belum disurati. Belum
-           masuk urusan SIPTL — tapi disebut di sini karena itulah yang
-           menghalangi berkas berikutnya sampai ke sini. */
-        $belumDisurati = Rekomendasi::with($muat)
-            ->whereNull('posisi')->get()
-            ->filter(fn ($r) => $r->bolehMasukTingkat2()
-                && $r->temuan->laporan->sumber->melewatiSiptl())
-            ->sortBy('kode')->values();
-
-        return view('siptl', [
-            'siapUnggah'    => $siapUnggah,
-            'menunggu'      => $menunggu,
-            'sudah'         => $sudah,
-            'belumDisurati' => $belumDisurati,
-            'status'        => StatusTindakLanjut::cases(),
-            'sorot'         => $req->query('sorot'),
+        $data = $req->validate([
+            'tanggal' => ['required', 'date', 'before_or_equal:today'],
+        ], [
+            'tanggal.required' => 'Tanggal unggah harus terisi.',
+            'tanggal.before_or_equal' => 'Tanggal unggah tidak boleh melewati hari ini.',
         ]);
+
+        UrusanSiptl::unggah($rek, $sasaran, $data['tanggal']);
+
+        return redirect()->route('rekomendasi.index');
+    }
+
+    /** Status disalin apa adanya dari SIPTL. BT tidak pernah dipilih orang. */
+    public function status(Request $req, Sasaran $sasaran)
+    {
+        $rek = $this->jaga($sasaran);
+        abort_unless((bool) $sasaran->siptl_tanggal, 422, 'Catat dulu unggahannya ke SIPTL.');
+
+        $data = $req->validate([
+            'status'     => ['required', 'in:BS,SS'],
+            'catatan'    => [$req->input('status') === 'BS' ? 'required' : 'nullable', 'string', 'max:500'],
+            'tgl_pantau' => ['nullable', 'date', 'before_or_equal:today'],
+        ], [
+            'status.required'  => 'Pilih hasil pemantauannya.',
+            'catatan.required' => 'Catatan BPK harus terisi.',
+        ]);
+
+        UrusanSiptl::status($rek, $sasaran, StatusTindakLanjut::from($data['status']), $data['catatan'] ?? null, $data['tgl_pantau'] ?? null);
+
+        return redirect()->route('rekomendasi.index');
+    }
+
+    /** BPK menolak satu tindak lanjut: dikirim ulang ke satuan kerjanya. */
+    public function ulangBpk(Request $req, Rekomendasi $rekomendasi)
+    {
+        $data = $req->validate([
+            'sasaran_id' => ['required', 'integer'],
+            'alasan'     => ['required', 'string', 'max:500'],
+            'keterangan' => ['nullable', 'string', 'max:500'],
+            'nilai'      => ['nullable', 'integer', 'min:0'],
+            'dokumen'    => ['array'],
+            'dokumen.*'  => ['nullable', 'string', 'max:255'],
+        ], [
+            'alasan.required' => 'Catatan untuk satuan kerja harus terisi.',
+        ]);
+
+        $sasaran = $rekomendasi->sasaran()->where('sasarans.id', $data['sasaran_id'])->firstOrFail();
+        $rek = $this->jaga($sasaran);
+        abort_unless($sasaran->status_bpk === StatusTindakLanjut::BS, 422, 'Hanya tindak lanjut yang dinyatakan Belum Sesuai oleh BPK yang bisa dikirim ulang.');
+
+        UrusanSiptl::ulangBpk($rek, $sasaran, $data['alasan'], $data['keterangan'] ?? null,
+            $data['dokumen'] ?? [], (int) ($data['nilai'] ?? 0));
+
+        return redirect()->route('rekomendasi.index');
     }
 }

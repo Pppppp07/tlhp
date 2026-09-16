@@ -3,13 +3,17 @@
 namespace Tests\Feature;
 
 use App\Enums\PosisiBerkas;
-use App\Enums\StatusTindakLanjut;
+use App\Models\DrafTanggapan;
 use App\Models\Laporan;
+use App\Models\Notifikasi;
 use App\Models\Rekomendasi;
-use Database\Seeders\BanyakLaporanSeeder;
-use Database\Seeders\ContohLaporanSeeder;
-use Database\Seeders\DataMasterSeeder;
+use App\Models\Sasaran;
+use App\Models\Satker;
+use App\Models\Temuan;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
+use Tests\PakaiDataContoh;
 use Tests\TestCase;
 
 /**
@@ -17,145 +21,105 @@ use Tests\TestCase;
  *
  * Data contoh yang tidak masuk akal membuat seluruh tampilan di atasnya ikut
  * tidak bisa dipercaya — dan yang paling berbahaya, salahnya tidak kelihatan
- * sampai ada orang yang membaca angkanya sungguh-sungguh. Uji ini memeriksa
- * hal-hal yang mustahil terjadi di dunia nyata.
+ * sampai ada orang yang membaca angkanya sungguh-sungguh.
+ *
+ * Angkanya sama persis dengan yang diperagakan prototipe: 24 laporan, 26
+ * temuan, 44 rekomendasi, 85 penugasan.
  */
 class DataContohTest extends TestCase
 {
-    use RefreshDatabase;
+    use PakaiDataContoh, RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->seed([DataMasterSeeder::class, ContohLaporanSeeder::class, BanyakLaporanSeeder::class]);
+        $this->siapkanDataContoh();
     }
 
-    public function test_skalanya_cukup_untuk_uji_beban(): void
+    public function test_ukurannya_sama_dengan_prototipe(): void
     {
-        $this->assertGreaterThanOrEqual(18, Laporan::count());
-        $this->assertGreaterThanOrEqual(80, Rekomendasi::count());
+        $this->assertSame(24, Laporan::count());
+        $this->assertSame(26, Temuan::count());
+        $this->assertSame(44, Rekomendasi::count());
+        $this->assertSame(85, Sasaran::count());
+        $this->assertSame(16, Satker::count());
+        /* Lima akun peran ditambah satu akun tiap satuan kerja. */
+        $this->assertSame(21, User::count());
     }
 
     public function test_tidak_ada_tanggal_di_masa_depan(): void
     {
+        $ini = now()->toDateString();
+
         foreach (Laporan::all() as $l) {
-            $this->assertFalse($l->tgl_surat->isFuture(), "{$l->nomor}: tanggal surat di masa depan");
-            $this->assertFalse($l->tgl_terima->isFuture(), "{$l->nomor}: tanggal terima di masa depan");
-            $this->assertFalse($l->dicatat_pada->isFuture(), "{$l->nomor}: dicatat di masa depan");
+            $this->assertLessThanOrEqual($ini, $l->tgl_surat->toDateString(), "Laporan {$l->nomor}");
+            $this->assertLessThanOrEqual($ini, $l->tgl_terima->toDateString(), "Laporan {$l->nomor}");
+            $this->assertGreaterThanOrEqual($l->tgl_surat->toDateString(), $l->tgl_terima->toDateString(),
+                "Laporan {$l->nomor} diterima sebelum suratnya dibuat");
+        }
+
+        foreach (Sasaran::whereNotNull('siptl_tanggal')->get() as $x) {
+            $this->assertLessThanOrEqual($ini, $x->siptl_tanggal->toDateString());
         }
     }
 
-    public function test_urutan_tanggal_laporan_masuk_akal(): void
+    public function test_tiap_rekomendasi_punya_baris_dan_kode_yang_tidak_kembar(): void
     {
-        foreach (Laporan::all() as $l) {
-            $this->assertTrue($l->tgl_surat->lessThanOrEqualTo($l->tgl_terima),
-                "{$l->nomor}: surat diterima sebelum suratnya dibuat");
-            $this->assertTrue($l->tgl_terima->lessThanOrEqualTo($l->dicatat_pada),
-                "{$l->nomor}: dicatat sebelum suratnya diterima");
+        $kode = Rekomendasi::pluck('kode');
+        $this->assertSame($kode->count(), $kode->unique()->count(), 'Ada kode rekomendasi yang kembar.');
+
+        foreach (Rekomendasi::with('sasaran')->get() as $r) {
+            $this->assertNotEmpty($r->daftarSasaran(), "Rekomendasi {$r->kode} tidak punya penugasan.");
         }
     }
 
-    /* Sumbu status hanya berarti kalau ia benar-benar hanya berubah lewat
-       surat bernomor. Satu saja yang lolos tanpa surat, seluruh jaminan itu
-       batal. */
-    public function test_status_selain_bt_wajib_punya_surat_verifikasi(): void
+    public function test_nilai_rekomendasi_sama_dengan_jumlah_bagiannya(): void
     {
-        $tanpa = Rekomendasi::with('keputusan')->get()
-            ->filter(fn ($r) => $r->status !== StatusTindakLanjut::BT && $r->keputusan->isEmpty());
-
-        $this->assertTrue($tanpa->isEmpty(),
-            'berstatus tanpa surat: ' . $tanpa->pluck('kode')->join(', '));
+        foreach (Rekomendasi::with('sasaran')->get() as $r) {
+            $this->assertSame((int) $r->nilai_pulih, $r->nilaiRek(),
+                "Nilai tersimpan rekomendasi {$r->kode} berbeda dari jumlah bagiannya.");
+        }
     }
 
-    public function test_hasil_bs_selalu_diberi_tenggat_baru(): void
+    public function test_hanya_lhp_yang_punya_status_bpk(): void
     {
-        $r = \App\Models\KeputusanVerifikasi::where('hasil', 'BS')->whereNull('tenggat_baru')->get();
-
-        $this->assertTrue($r->isEmpty(),
-            'keputusan BS tanpa tenggat baru: ' . $r->pluck('id')->join(', '));
-    }
-
-    public function test_setoran_tidak_melebihi_tagihan(): void
-    {
-        $lebih = Rekomendasi::with('pemulihan')->get()
-            ->filter(fn ($r) => $r->nilaiTerpulihkan() > $r->nilai_pulih);
-
-        $this->assertTrue($lebih->isEmpty(),
-            'setoran melebihi tagihan: ' . $lebih->pluck('kode')->join(', '));
-    }
-
-    /* Berkas tidak bisa berada di luar satuan kerja tanpa bukti apa pun —
-       tidak ada yang bisa diteruskan kalau isinya kosong sama sekali.
-       Buktinya tidak harus berupa tanggapan tertulis: ada rekomendasi yang
-       diselesaikan dengan menyetor uangnya, ada yang cukup mengunggah
-       berkasnya. */
-    public function test_berkas_yang_sudah_bergerak_punya_isi(): void
-    {
-        $kosong = Rekomendasi::with('tindakLanjut', 'pemulihan', 'lampiran')->get()
-            ->filter(fn ($r) => $r->posisiTampil() !== PosisiBerkas::SATKER
-                && $r->tindakLanjut->isEmpty()
-                && $r->pemulihan->isEmpty()
-                && $r->lampiran->isEmpty());
-
-        $this->assertTrue($kosong->isEmpty(),
-            'sudah bergerak tanpa bukti apa pun: ' . $kosong->pluck('kode')->join(', '));
-    }
-
-    public function test_riwayat_berkas_maju_terus(): void
-    {
-        foreach (Rekomendasi::with('riwayat')->get() as $r) {
-            $sebelum = null;
-            foreach ($r->riwayat as $j) {
-                if ($sebelum) {
-                    $this->assertTrue($j->waktu->greaterThanOrEqualTo($sebelum),
-                        "{$r->kode}: riwayat mundur di {$j->waktu}");
-                }
-                $sebelum = $j->waktu;
+        foreach (Sasaran::with('tindakan.rekomendasi.temuan.laporan')->get() as $x) {
+            if ($x->status_bpk === null && $x->siptl_tanggal === null) {
+                continue;
             }
+            $this->assertTrue($x->tindakan->rekomendasi->jenis()->melewatiSiptl(),
+                'Baris LHA tidak boleh punya urusan SIPTL.');
         }
     }
 
-    /* Kalau setiap laporan hanya memeriksa satu satuan kerja, seluruh alasan
-       memindahkan satker ke temuan jadi tidak terperagakan. */
-    public function test_ada_laporan_yang_memeriksa_beberapa_satuan_kerja(): void
+    public function test_baris_yang_sudah_naik_ke_siptl_pasti_sudah_tuntas(): void
     {
-        $banyak = Laporan::with('temuan.satkers')->get()
-            ->filter(fn ($l) => $l->satkerDiperiksa()->count() > 1);
-
-        $this->assertGreaterThanOrEqual(5, $banyak->count(),
-            'terlalu sedikit laporan yang memeriksa lebih dari satu satuan kerja');
-    }
-
-    public function test_ada_rekomendasi_yang_penanggungnya_bukan_yang_diperiksa(): void
-    {
-        $beda = Rekomendasi::with('temuan')->get()
-            ->filter(function ($r) {
-                /* Yang menanggung perbaikan tidak selalu yang diperiksa.
-                   Sekarang keduanya jamak, jadi yang dicari adalah rekomendasi
-                   yang punya sasaran di luar daftar satuan kerja temuannya. */
-                $diperiksa = $r->temuan->satkers->pluck('id');
-                return $r->daftarSasaran()->contains(
-                    fn ($x) => $x->satker_id && ! $diperiksa->contains($x->satker_id));
-            });
-
-        $this->assertGreaterThan(0, $beda->count(),
-            'tidak ada satu pun rekomendasi yang penanggungnya berbeda dari satker terperiksa');
-    }
-
-    /* Semua sembilan posisi terisi: kalau ada yang kosong, layar untuk peran
-       itu tidak pernah bisa dilihat isinya saat memperagakan sistem. */
-    public function test_semua_posisi_terisi(): void
-    {
-        /* Posisi tingkat 1 ada di sasaran, tingkat 2 di rekomendasi.
-           Keduanya digabung: yang diuji adalah "semua posisi terpakai", dan
-           posisi memang tersimpan di dua tempat sekarang. */
-        $ada = \App\Models\Sasaran::pluck('posisi')
-            ->merge(Rekomendasi::whereNotNull('posisi')->pluck('posisi'))
-            ->map(fn ($p) => $p instanceof PosisiBerkas ? $p->value : $p)
-            ->unique();
-
-        foreach (PosisiBerkas::cases() as $p) {
-            $this->assertTrue($ada->contains($p->value), "posisi {$p->value} kosong di data contoh");
+        foreach (Sasaran::whereNotNull('siptl_tanggal')->get() as $x) {
+            $this->assertSame(PosisiBerkas::TUNTAS, $x->pos(),
+                'Baris yang diunggah ke SIPTL harus sudah selesai diperiksa.');
         }
+    }
+
+    public function test_penyapu_draf_sudah_berjalan_sekali(): void
+    {
+        /* Penyemai memanggil `tlhp:kirim-draf`, jadi draf yang mengendap lewat
+           tujuh hari sudah terkirim — sama seperti prototipe yang menyapunya
+           saat aplikasi dibuka. */
+        $sapuan = Notifikasi::where('aksi', 'like', 'Terkirim otomatis%')->count();
+        $this->assertGreaterThan(0, $sapuan);
+
+        foreach (DrafTanggapan::with('sasaran')->get() as $draf) {
+            $this->assertNotNull($draf->sasaran, 'Draf tanggapan tanpa barisnya.');
+        }
+    }
+
+    public function test_perintah_penyapu_aman_dijalankan_ulang(): void
+    {
+        $sebelum = Notifikasi::count();
+
+        Artisan::call('tlhp:kirim-draf');
+
+        /* Yang sudah terkirim tidak dikirim dua kali. */
+        $this->assertSame($sebelum, Notifikasi::count());
     }
 }

@@ -3,179 +3,152 @@
 namespace App\Http\Controllers;
 
 use App\Enums\PeranPengguna;
-use App\Enums\PosisiBerkas;
 use App\Enums\StatusTindakLanjut;
-use App\Enums\SumberLaporan;
 use App\Models\Rekomendasi;
 use App\Models\Satker;
+use App\Support\Lingkup;
 use App\Support\Terlihat;
+use App\Support\TindakLanjutRingkas;
 use Illuminate\Http\Request;
 
 /**
- * Sisi baca rekomendasi.
+ * Layar Rekomendasi (padanan `SemuaRekom`) dan halaman rinciannya.
  *
- * Tindakannya sendiri ada di dua tempat lain, dan pembagian itu mengikuti dua
- * tingkat gerak yang memang berbeda:
- *
- *   SasaranController  gerak tingkat 1 — berkas tiap satuan kerja
- *   SuratController    gerak tingkat 2 — rekomendasinya sendiri
- *
- * Kepala tabelnya mengikuti prototipe: dua deret keping (jenis laporan dan
- * keranjang) lalu baris penyaring. Angkanya dihitung dari daftar penuh, bukan
- * dari hasil saringan — kalau ikut tersaring, angkanya berubah tiap kali orang
- * mengetik dan tidak ada lagi yang bisa dijadikan pegangan.
+ * Satu layar untuk semua peran: keranjang di kepalanya menggantikan lima layar
+ * lama yang isinya daftar sama disaring berbeda. Angka tiap keranjang dihitung
+ * dari daftar penuh, bukan dari hasil saringan — kalau ikut tersaring, angkanya
+ * berubah tiap kali orang mengetik.
  */
 class RekomendasiController extends Controller
 {
+    public function beranda()
+    {
+        return auth()->user()->peran === PeranPengguna::PIMPINAN
+            ? redirect()->route('ringkasan')
+            : redirect()->route('rekomendasi.index');
+    }
+
+    /** Muatan yang dibutuhkan hitungan daftar: meja, kemajuan, tenggat, urgensi. */
+    public const MUAT_DAFTAR = [
+        'temuan.laporan', 'sasaran.satker', 'tindakan.bentuk',
+        'pemulihan', 'tolakanBpk', 'permintaanDokumen.item', 'riwayat',
+    ];
+
     public function index(Request $req)
     {
-        $peran = auth()->user()->peran;
-        $satkerAktif = auth()->user()->satker_id;
+        $u = auth()->user();
+        $peran = $u->peran;
+        $satkerAktif = $u->satker_id;
         $terlihat = Terlihat::untuk();
+        $lingkup = Lingkup::dari($req);
 
-        /* Lewat penyaring hak akses, bukan Rekomendasi::query() lalu disaring
-           di sini. Yang tidak boleh dilihat juga tidak boleh ketemu lewat
-           pencarian. */
-        $semua = $terlihat->rekomendasi()
-            ->with([
-                'temuan.laporan', 'temuan.satkers',
-                'sasaran.satker', 'tindakan.bentuk',
-                'pemulihan', 'permintaanDokumen.item',
-            ])
-            ->get()
+        /* Urutan dasar = urutan pencatatan (laporan, temuan, rekomendasi),
+           sama dengan prototipe; yang seri pada urutan mana pun jatuh ke sini. */
+        $utuh = $terlihat->rekomendasi()->with(self::MUAT_DAFTAR)->orderBy('rekomendasis.id')->get()
             ->map(fn ($r) => $terlihat->pangkasRekomendasi($r));
 
-        /* ---------- keranjang ---------- */
-
-        $diMejaku = function ($r) use ($peran, $satkerAktif) {
-            $baris = $r->daftarSasaran();
-            if ($peran === PeranPengguna::SATKER) {
-                $baris = $baris->where('satker_id', $satkerAktif);
-            }
-            return $baris->contains(fn ($x) => $x->posisi?->pemegang() === $peran)
-                || $r->posisi?->pemegang() === $peran
-                || ($peran === PeranPengguna::SETBA && $r->bolehMasukTingkat2());
-        };
-
-        $selesai = fn ($r) => $r->posisiTampil() === PosisiBerkas::SELESAI;
-
-        $KERANJANG = [
-            'kerjakan' => ['nama' => 'Perlu saya kerjakan', 'uji' => $diMejaku],
-            'menunggu' => ['nama' => 'Sedang menunggu',
-                           'uji' => fn ($r) => ! $diMejaku($r) && ! $selesai($r)],
-            'selesai'  => ['nama' => 'Sudah selesai', 'uji' => $selesai],
-            /* Bukan keadaan berkas, melainkan urusan tersendiri — karena itu ia
-               berdiri di seberang pemisah, bukan jadi keranjang keempat. */
-            'siptl'    => ['nama' => 'Urusan SIPTL', 'pemisah' => true,
-                           'uji' => fn ($r) => in_array($r->posisi,
-                               [PosisiBerkas::SIPTL, PosisiBerkas::BPK], true)],
-        ];
-
-        $jenis = $req->query('jenis', '');
-        $keadaan = $req->query('keadaan', '');
-        $cari = trim((string) $req->query('cari'));
-        $status = $req->query('status', '');
-        $satker = $req->query('satker', '');
-
-        /* Angka keping jenis laporan dihitung sebelum saringan jenis dipakai;
-           angka keranjang dihitung sesudahnya. Begitulah prototipe: keranjang
-           menghitung apa yang sedang dilihat, jenis menghitung seluruhnya. */
+        /* Dihitung sebelum lingkup disaring: kalau dari daftar yang sudah
+           disaring, membuka LHP membuat tombol LHA menulis nol — dan tombol
+           yang menulis nol tidak bisa lagi dipakai untuk pindah ke sana. */
         $jumlahJenis = [
-            '' => $semua->count(),
-            SumberLaporan::LHP->value => $semua->filter(fn ($r) => $r->temuan->laporan->sumber === SumberLaporan::LHP)->count(),
-            SumberLaporan::LHA->value => $semua->filter(fn ($r) => $r->temuan->laporan->sumber === SumberLaporan::LHA)->count(),
+            'semua' => $utuh->count(),
+            'LHP'   => $utuh->filter(fn ($r) => $r->jenis()->value === 'LHP')->count(),
+            'LHA'   => $utuh->filter(fn ($r) => $r->jenis()->value === 'LHA')->count(),
         ];
 
-        $lingkup = $jenis === ''
-            ? $semua
-            : $semua->filter(fn ($r) => $r->temuan->laporan->sumber->value === $jenis);
+        $daftar = $utuh->filter(fn ($r) => Lingkup::berlaku($lingkup, $r->jenis()))->values();
 
-        $jumlahKeranjang = collect($KERANJANG)
-            ->map(fn ($k) => $lingkup->filter($k['uji'])->count())->all();
+        $KEADAAN = [
+            'kerja'   => ['nama' => 'Perlu saya kerjakan',
+                          'uji' => fn ($r) => $r->diMeja($peran, $satkerAktif)],
+            'tunggu'  => ['nama' => 'Sedang menunggu',
+                          'uji' => fn ($r) => ! $r->beres() && ! $r->diMeja($peran, $satkerAktif)],
+            'selesai' => ['nama' => 'Sudah selesai', 'uji' => fn ($r) => $r->beres()],
+            /* Potongan dari "Perlu saya kerjakan", dikendalikan sistem luar.
+               Hanya Setba, dan hanya lingkup yang memuat LHP. */
+            'siptl'   => ['nama' => 'Urusan SIPTL', 'khusus' => PeranPengguna::SETBA, 'jenis' => 'LHP', 'ikon' => 'Landmark',
+                          'uji' => fn ($r) => $r->kerjaSiptl()],
+        ];
+        $keadaanAda = array_filter($KEADAAN, fn ($v) => (! isset($v['khusus']) || $v['khusus'] === $peran)
+            && (! isset($v['jenis']) || $lingkup === 'semua' || $lingkup === $v['jenis']));
+        $jumlah = array_map(fn ($v) => $daftar->filter($v['uji'])->count(), $KEADAAN);
 
-        /* ---------- saringan ---------- */
+        /* Keadaan bawaan mengikuti perannya: yang mengerjakan berkas dibukakan
+           pekerjaannya, yang cuma memantau dibukakan semuanya. Keranjang yang
+           tombolnya tidak ada dilepas — yang tampil jadi seluruhnya. */
+        $keadaan = $req->query('keadaan', $peran === PeranPengguna::PIMPINAN ? 'semua' : 'kerja');
+        $keadaanKini = isset($keadaanAda[$keadaan]) ? $keadaan : null;
 
-        $hasil = $lingkup
-            ->when($keadaan !== '' && isset($KERANJANG[$keadaan]),
-                fn ($c) => $c->filter($KERANJANG[$keadaan]['uji']))
-            ->when($status !== '', fn ($c) => $c->filter(fn ($r) => $r->status->value === $status))
-            ->when($satker !== '', fn ($c) => $c->filter(
-                fn ($r) => $r->daftarSasaran()->contains('satker_id', (int) $satker)))
-            ->when($cari !== '', fn ($c) => $c->filter(function ($r) use ($cari) {
-                $teks = implode(' ', [
-                    $r->kode, $r->ref_lhp, $r->uraian,
-                    $r->temuan->kode, $r->temuan->judul, $r->temuan->laporan->nomor,
-                    $r->daftarSasaran()->map(fn ($x) => $x->satker?->nama)->join(' '),
-                ]);
-                return str_contains(mb_strtolower($teks), mb_strtolower($cari));
-            }))
-            ->values();
-
-        /* Keping SIPTL hanya muncul kalau jalurnya memang lewat SIPTL — pada
-           lingkup LHA ia keranjang yang tidak akan pernah terisi. */
-        if ($jenis === SumberLaporan::LHA->value) {
-            unset($KERANJANG['siptl']);
+        $q = trim((string) $req->query('q', ''));
+        $sk = $req->query('sk', 'semua');
+        $st = $req->query('st', 'semua');
+        $stBerlaku = $lingkup === 'LHA' ? 'semua' : $st;
+        [$urut, $arah] = array_pad(explode(':', (string) $req->query('urut', 'mendesak')), 2, 'naik');
+        if (! in_array($urut, ['mendesak', 'uraian', 'satker', 'tenggat', 'kemajuan'], true)) {
+            $urut = 'mendesak';
         }
 
-        return view('rekomendasi/index', [
-            'daftar'          => $hasil,
-            'semuaJumlah'     => $lingkup->count(),
-            'perlu'           => $hasil->filter(fn ($r) => $r->lewatTenggat() > 0)->count(),
-            'KERANJANG'       => $KERANJANG,
-            'jumlahJenis'     => $jumlahJenis,
-            'jumlahKeranjang' => $jumlahKeranjang,
-            'jenis'           => $jenis,
-            'keadaan'         => $keadaan,
-            'cari'            => $cari,
-            'status'          => $status,
-            'satker'          => $satker,
-            'daftarSatker'    => $peran === PeranPengguna::SATKER
-                ? collect()
-                : Satker::orderBy('nama')->get(),
-            'daftarStatus'    => StatusTindakLanjut::cases(),
-            /* Berkas mana yang baru saja disentuh. Dihitung peladen, bukan
-               peramban: barisnya sudah bertanda saat HTML-nya sampai, jadi
-               penandanya tetap terlihat walau JavaScript mati. */
-            'tandai'          => (int) $req->query('tandai', 0),
-            'nada'            => $req->query('nada', 'aksen'),
+        $cocokTeks = function (Rekomendasi $r) use ($q) {
+            if ($q === '') {
+                return true;
+            }
+            $t = $r->temuan;
+            $teks = implode(' ', [$r->kode, $t->judul, $r->uraian, $r->refIdt(),
+                $t->laporan->nomor, $r->refLhp(), $r->daftarSasaran()->first()?->satker?->namaPendek()]);
+
+            return str_contains(mb_strtolower($teks), mb_strtolower($q));
+        };
+
+        $hasil = $daftar
+            ->filter(fn ($r) => ! $keadaanKini || $KEADAAN[$keadaanKini]['uji']($r))
+            ->filter(fn ($r) => $stBerlaku === 'semua' || ($r->jenis()->melewatiSiptl()
+                && TindakLanjutRingkas::kemajuan($r, $peran, $satkerAktif)['rangkuman'] === $stBerlaku))
+            ->filter(fn ($r) => $sk === 'semua' || $r->daftarSasaran()->contains('satker_id', (int) $sk))
+            ->filter($cocokTeks)
+            ->sort(function ($a, $b) use ($urut, $arah, $peran, $satkerAktif) {
+                $mendesak = $b->urgensi() <=> $a->urgensi();
+                if ($urut === 'mendesak') {
+                    return $mendesak;
+                }
+                $banding = match ($urut) {
+                    'uraian'   => strcmp($a->uraian, $b->uraian),
+                    'tenggat'  => strcmp((string) $a->tenggat_jawab?->toDateString(), (string) $b->tenggat_jawab?->toDateString()),
+                    'satker'   => (function () use ($a, $b, $peran, $satkerAktif) {
+                        $na = $a->satkerTampil($peran, $satkerAktif)->map->nama;
+                        $nb = $b->satkerTampil($peran, $satkerAktif)->map->nama;
+
+                        return strcmp((string) $na->first(), (string) $nb->first()) ?: $na->count() <=> $nb->count();
+                    })(),
+                    default    => TindakLanjutRingkas::bagian($a, $peran, $satkerAktif)
+                                  <=> TindakLanjutRingkas::bagian($b, $peran, $satkerAktif),
+                };
+
+                return ($arah === 'turun' ? -$banding : $banding) ?: $mendesak;
+            })
+            ->values();
+
+        return view('rekomendasi.index', [
+            'hasil'       => $hasil,
+            'daftar'      => $daftar,
+            'lingkup'     => $lingkup,
+            'jumlahJenis' => $jumlahJenis,
+            'KEADAAN'     => $KEADAAN,
+            'keadaanAda'  => $keadaanAda,
+            'keadaanKini' => $keadaanKini,
+            'jumlah'      => $jumlah,
+            'q'           => $q,
+            'sk'          => $sk,
+            'st'          => $st,
+            'urut'        => $urut,
+            'arah'        => $arah,
+            'perlu'       => $hasil->filter(fn ($r) => $r->perluPerhatian())->count(),
+            'daftarSatker'=> $peran === PeranPengguna::SATKER ? collect() : Satker::orderBy('id')->get(),
+            'STATUS'      => StatusTindakLanjut::cases(),
         ]);
     }
 
-    public function show(Rekomendasi $rekomendasi)
+    public function show(Request $req, Rekomendasi $rekomendasi)
     {
-        $terlihat = Terlihat::untuk();
-
-        /* Pemeriksaan dilakukan di sisi peladen, bukan disembunyikan di
-           tampilan. Satuan kerja hanya boleh membuka rekomendasi yang punya
-           baris untuknya. */
-        abort_unless($terlihat->bolehLihatRekomendasi($rekomendasi), 403,
-            'Rekomendasi ini tidak ditujukan ke satuan kerja Anda.');
-
-        $rekomendasi->load([
-            'temuan.laporan', 'temuan.rekomendasi', 'temuan.kategori', 'temuan.satkers',
-            'tindakan.bentuk', 'tindakan.sasaran.satker',
-            'sasaran.satker',
-            'sifat', 'alasanTd',
-            'tanggapan.sasaran.satker',
-            'permintaanDokumen.item', 'permintaanDokumen.sasaran.satker',
-            'pemulihan.lampiran', 'pemulihan.sasaran.satker',
-            'keputusan.verifikasi',
-            'lampiran.jenisDokumen',
-            'riwayat.sasaran.satker',
-            'permintaanUbah',
-            'pengembalian.sasaran.satker',
-            'telaah.sasaran.satker',
-            'surat',
-        ]);
-
-        /* Baris satuan kerja lain dibuang di sini, bukan di Blade. Menyaring di
-           tampilan berarti datanya sudah sampai di peramban dan tinggal dibaca
-           lewat "lihat sumber halaman". */
-        $terlihat->pangkasRekomendasi($rekomendasi);
-
-        return view('rekomendasi/show', [
-            'r'     => $rekomendasi,
-            'baris' => $terlihat->barisRekomendasi($rekomendasi),
-        ]);
+        return app(RincianController::class)->tampil($req, $rekomendasi);
     }
 }

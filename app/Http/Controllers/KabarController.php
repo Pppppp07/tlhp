@@ -5,36 +5,36 @@ namespace App\Http\Controllers;
 use App\Models\Notifikasi;
 use App\Support\Kabar;
 
+/**
+ * Layar Pemberitahuan — padanan `Pemberitahuan`, `bukaKabar`, dan
+ * `tandaiTerbaca` prototipe.
+ */
 class KabarController extends Controller
 {
+    /** Yang belum dibaca berdiri sendiri di atas; yang sudah dibaca turun ke
+        blok tertutup. Kalau bercampur, kabar baru tenggelam begitu daftarnya
+        panjang. */
     public function index()
     {
         $u = auth()->user();
-        $daftar = Kabar::untuk($u);
-        $sudah = $daftar->filter(fn ($k) => $k->dibaca->contains('id', $u->id));
+        [$sudah, $belum] = Kabar::untuk($u)->partition(fn ($k) => Kabar::sudahDibaca($k, $u));
 
-        return view('kabar', [
-            'belum' => $daftar->reject(fn ($k) => $sudah->contains('id', $k->id))->values(),
-            'sudah' => $sudah->values(),
-        ]);
+        return view('kabar', ['belum' => $belum->values(), 'sudah' => $sudah->values()]);
     }
 
-    /** Membuka satu kabar: ditandai terbaca, lalu diantar ke bagian yang
-        berubah — bukan sekadar ke halaman rincian dari atas. */
+    /**
+     * Dari kabar langsung ke bagian yang berubah: membuka rincian rekomendasinya
+     * lalu menunjuk bagiannya. Membukanya TIDAK menandai terbaca — sama dengan
+     * prototipe, tanda terbaca hanya lewat "Tandai semua terbaca".
+     */
     public function buka(Notifikasi $notifikasi)
     {
-        $u = auth()->user();
+        abort_unless(Kabar::boleh($notifikasi, auth()->user()), 403);
 
-        abort_unless(in_array($u->peran->value, $notifikasi->untuk_peran ?? [], true), 403);
-
-        $notifikasi->dibaca()->syncWithoutDetaching([$u->id => ['dibaca_pada' => now()]]);
-
-        $tujuan = route('rekomendasi.show', $notifikasi->rekomendasi_id);
-        if ($notifikasi->blok) {
-            $tujuan .= '#' . $notifikasi->blok;
-        }
-
-        return redirect($tujuan);
+        return redirect()->route('rekomendasi.show', array_filter([
+            'rekomendasi' => $notifikasi->rekomendasi_id,
+            'sorot'       => $notifikasi->blok,
+        ]));
     }
 
     public function tandaiSemua()
@@ -42,9 +42,11 @@ class KabarController extends Controller
         $u = auth()->user();
 
         foreach (Kabar::untuk($u) as $k) {
-            $k->dibaca()->syncWithoutDetaching([$u->id => ['dibaca_pada' => now()]]);
+            if (! Kabar::sudahDibaca($k, $u)) {
+                $k->dibaca()->attach($u->id, ['dibaca_pada' => now()]);
+            }
         }
 
-        return back()->with('pesan', 'Semua kabar ditandai sudah dibaca.');
+        return back();
     }
 }

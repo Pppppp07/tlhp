@@ -6,41 +6,112 @@ use App\Enums\HasilTelaah;
 use App\Enums\PeranPengguna;
 use App\Enums\PosisiBerkas;
 use App\Enums\StatusTindakLanjut;
+use App\Enums\SumberLaporan;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Satu satuan kerja pada satu bentuk tindak lanjut.
+ * Satu satuan kerja pada satu bentuk tindak lanjut — satu baris penugasan.
  *
- * Di sinilah tingkat 1 hidup. Semua yang dikerjakan satuan kerja menggantung
- * di sini, bukan di rekomendasi: jawabannya, setorannya, dokumen yang diminta
- * darinya, telaah atas berkasnya, dan jejak perpindahannya.
- *
- * Alasannya sederhana. Selama gantungannya di rekomendasi, jawaban Balai Medan
- * dan Politeknik PU bercampur dalam satu daftar, dan tidak ada cara memisahkan
- * mana yang milik siapa - sementara keduanya bisa berada di tahap yang sama
- * sekali berbeda.
+ * Inilah yang menempuh proses. Rekomendasi tidak: posisi berkas, tiga
+ * penilaian (UKI, Inspektorat, BPK), unggahan SIPTL, dan pemberkasan ulang
+ * semuanya milik baris ini. Satu rekomendasi yang dipikul tiga satuan kerja
+ * berisi tiga perjalanan yang berbeda, dan bisa berada di tiga meja sekaligus.
  */
 class Sasaran extends Model
 {
+    /* `siptl_tanggal` sengaja tidak di sini. Tanggal unggah SIPTL dikunci
+       sekali tercatat, dan kolom yang bisa diisi massal bisa ditimpa lewat
+       `update($request->all())` tanpa sengaja. Penulisnya satu:
+       `CatatSiptl`, lewat forceFill. */
     protected $fillable = ['tindakan_id', 'satker_id', 'nilai',
-        'nilai_ss', 'nilai_memadai', 'posisi', 'hasil', 'catatan'];
+        'nilai_ss', 'nilai_memadai', 'posisi', 'hasil', 'hasil_uki', 'catatan',
+        'status_bpk', 'catatan_bpk', 'tgl_pantau',
+        'kembali_dari', 'alasan_perbaikan', 'batas_perbaikan', 'keterangan_setba', 'dokumen_diminta'];
 
     protected $casts = [
-        'posisi' => PosisiBerkas::class,
-        'hasil'  => HasilTelaah::class,
+        'posisi'          => PosisiBerkas::class,
+        'hasil'           => HasilTelaah::class,
+        'hasil_uki'       => HasilTelaah::class,
+        'status_bpk'      => StatusTindakLanjut::class,
+        'siptl_tanggal'   => 'date',
+        'tgl_pantau'      => 'date',
+        'batas_perbaikan' => 'date',
+        'dokumen_diminta' => 'array',
     ];
 
+    public function tindakan() { return $this->belongsTo(Tindakan::class); }
+    public function satker()   { return $this->belongsTo(Satker::class); }
+
+    public function tanggapan()         { return $this->hasMany(Tanggapan::class)->orderBy('tanggal')->orderBy('id'); }
+    public function pemulihan()         { return $this->hasMany(Pemulihan::class)->orderBy('tanggal')->orderBy('id'); }
+    public function permintaanDokumen() { return $this->hasMany(PermintaanDokumen::class)->orderBy('tanggal')->orderBy('id'); }
+    public function pengembalian()      { return $this->hasMany(Pengembalian::class)->orderBy('tanggal')->orderBy('id'); }
+    public function telaah()            { return $this->hasMany(Telaah::class)->orderBy('tanggal')->orderBy('id'); }
+    public function riwayat()           { return $this->hasMany(RiwayatBerkas::class)->orderBy('waktu'); }
+    public function lampiran()          { return $this->hasMany(Lampiran::class); }
+    public function surat()             { return $this->hasMany(Surat::class)->orderBy('tanggal')->orderBy('id'); }
+    public function tolakanBpk()        { return $this->hasMany(TolakanBpk::class)->orderBy('tanggal')->orderBy('id'); }
+    public function draf()              { return $this->hasOne(DrafTanggapan::class); }
+
+    /** Tiap perubahan penilaian, urut menurut pencatatannya. */
+    public function riwayatStatus()     { return $this->hasMany(RiwayatStatus::class)->orderBy('id'); }
+
+    /** Jalan pintas ke rekomendasinya - dipakai di banyak tempat. */
+    public function rekomendasi(): ?Rekomendasi
+    {
+        return $this->tindakan?->rekomendasi;
+    }
+
+    /* ================================================================
+       POSISI
+       ================================================================ */
+
     /**
-     * Nilai yang sudah DIAKUI, dua sumbu karena yang mengakui ada dua.
-     *
-     * Medannya boleh kosong. Kosong berarti "belum ada angkanya sendiri",
-     * bukan nol — yang membacanya jatuh ke keadaannya: utuh bila sudah beres,
-     * nol bila belum. Kalau kosong diperlakukan nol, rekomendasi yang sudah
-     * dinyatakan sesuai akan terbaca belum diakui sepeser pun.
-     *
-     * Nilainya bisa diakui SEBAGIAN, dan itu bukan hal langka — Mas Naufal:
-     * "setoran Rp 100 juta tapi ternyata yang diterima cuman Rp 80 juta,
-     * Rp 20 jutanya dibatalkan pemenuhannya."
+     * Posisi baris ini, dan satu-satunya cara membacanya. Baris yang belum
+     * pernah bergerak masih di satuan kerja — tidak meminjam posisi siapa pun.
+     */
+    public function pos(): PosisiBerkas
+    {
+        return $this->posisi ?? PosisiBerkas::SATKER;
+    }
+
+    public function tuntas(): bool
+    {
+        return $this->pos() === PosisiBerkas::TUNTAS;
+    }
+
+    public function pemegang(): ?PeranPengguna
+    {
+        return $this->pos()->pemegang();
+    }
+
+    /* ================================================================
+       URUSAN SIPTL — hanya jalur yang lewat BPK
+       ================================================================ */
+
+    /**
+     * Satu baris naik ke SIPTL begitu tindak lanjutnya selesai diperiksa —
+     * tidak menunggu satuan kerja lain.
+     */
+    public function perluUnggah(SumberLaporan $jenis): bool
+    {
+        return $jenis->melewatiSiptl() && $this->tuntas() && ! $this->siptl_tanggal;
+    }
+
+    /** Sudah diunggah, dan BPK belum memutus tuntas untuk baris ini. */
+    public function perluCek(SumberLaporan $jenis): bool
+    {
+        return $jenis->melewatiSiptl() && $this->siptl_tanggal
+            && ! in_array($this->status_bpk, [StatusTindakLanjut::SS, StatusTindakLanjut::TD], true);
+    }
+
+    /* ================================================================
+       NILAI YANG DIAKUI
+       ================================================================ */
+
+    /**
+     * Medan kosong berarti "belum ada angkanya sendiri", bukan nol — yang
+     * membacanya jatuh ke keadaannya: utuh bila sudah beres, nol bila belum.
      */
     public function nilaiDiakuiItjen(): int
     {
@@ -50,189 +121,80 @@ class Sasaran extends Model
     }
 
     /**
-     * Sisi BPK. Statusnya sendiri milik REKOMENDASI — BPK menutup rekomendasi,
-     * bukan satuan kerja satu per satu — tapi nilainya per baris, karena
-     * uangnya memang ditagihkan per satuan kerja.
+     * Sisi BPK dibaca dari status baris ini sendiri. Baris yang belum pernah
+     * berstatus jatuh ke status rekomendasinya — catatan lama.
      */
-    public function nilaiDiakuiBpk(): int
+    public function nilaiDiakuiBpk(?Rekomendasi $rek = null): int
     {
         if ($this->nilai_ss !== null) {
             return (int) $this->nilai_ss;
         }
-        $rek = $this->rekomendasi();
+        if ($this->status_bpk) {
+            return $this->status_bpk === StatusTindakLanjut::SS ? (int) $this->nilai : 0;
+        }
+        $rek ??= $this->rekomendasi();
 
         return $rek && $rek->status === StatusTindakLanjut::SS ? (int) $this->nilai : 0;
     }
 
-    /** Nilai yang belum diakui, menurut masing-masing sumbu. */
     public function sisaNilaiItjen(): int { return max(0, (int) $this->nilai - $this->nilaiDiakuiItjen()); }
     public function sisaNilaiBpk(): int   { return max(0, (int) $this->nilai - $this->nilaiDiakuiBpk()); }
 
-    public function tindakan() { return $this->belongsTo(Tindakan::class); }
-    public function satker()   { return $this->belongsTo(Satker::class); }
+    /* ================================================================
+       BAHASA TAMPILAN — padanan `presentasiBerkas` prototipe
+       ================================================================ */
 
-    public function tanggapan()        { return $this->hasMany(Tanggapan::class)->orderBy('tanggal'); }
-    public function pemulihan()        { return $this->hasMany(Pemulihan::class)->orderBy('tanggal'); }
-    public function permintaanDokumen(){ return $this->hasMany(PermintaanDokumen::class)->orderBy('tanggal'); }
-    public function pengembalian()     { return $this->hasMany(Pengembalian::class)->orderBy('tanggal'); }
-    public function telaah()           { return $this->hasMany(Telaah::class)->orderBy('tanggal'); }
-    public function riwayat()          { return $this->hasMany(RiwayatBerkas::class)->orderBy('waktu'); }
-    public function lampiran()         { return $this->hasMany(Lampiran::class); }
-    public function surat()            { return $this->hasMany(Surat::class)->orderBy('tanggal'); }
-
-    /** Jalan pintas ke rekomendasinya - dipakai di banyak tempat. */
-    public function rekomendasi(): ?Rekomendasi
+    /**
+     * Siapa yang memegang, apa yang sedang terjadi, dan langkah berikutnya.
+     * Hanya bahasa: perpindahan berkas dan keputusan tetap milik pengendalinya.
+     *
+     * @return array{pemegang:string, judul:string, langkah:string, selesai:bool}
+     */
+    public function presentasi(SumberLaporan $jenis): array
     {
-        return $this->tindakan?->rekomendasi;
-    }
+        $alur = [
+            'satker'         => ['Satuan kerja', 'Menyiapkan tanggapan', 'Lengkapi bukti dan tanggapan, lalu kirim ke Setba.'],
+            'setba_tinjau'   => ['Setba', 'Meninjau kelengkapan tanggapan', 'Periksa kelengkapan berkas, lalu teruskan ke UKI dengan surat pengantar.'],
+            'uki'            => ['UKI', 'Menunggu telaah UKI', 'UKI menelaah bukti dan mencatat hasil validasi beserta suratnya.'],
+            'setba_teruskan' => ['Setba', 'Meneruskan hasil validasi UKI', 'Teruskan berkas ke Inspektorat dengan surat permohonan verifikasi.'],
+            'inspektorat'    => ['Inspektorat', 'Menunggu hasil verifikasi', 'Catat putusan Inspektorat berdasarkan CHV dan LHV yang diterima.'],
+            'setba_kembali'  => ['Setba', 'Menyiapkan pengembalian berkas', 'Periksa alasan penolakan dan dokumen yang diminta, lalu kirim ulang ke satuan kerja.'],
+        ];
+        $pos = $this->pos();
+        $isi = $alur[$pos->value] ?? null;
+        $selesai = false;
 
-    /* ---------- progres, tidak pernah disimpan ---------- */
-
-    public function nilaiTerpulihkan(): int
-    {
-        return (int) $this->pemulihan->sum('nilai');
-    }
-
-    public function sisaPemulihan(): int
-    {
-        return max(0, (int) $this->nilai - $this->nilaiTerpulihkan());
-    }
-
-    public function lunas(): bool
-    {
-        return (int) $this->nilai === 0 || $this->sisaPemulihan() === 0;
-    }
-
-    /** Kelengkapan dokumen sebagai [terpenuhi, total]. Null bila memang tidak
-        ada permintaan sama sekali. */
-    public function progresDokumen(): ?array
-    {
-        $butir = $this->permintaanDokumen->flatMap->item;
-        if ($butir->isEmpty()) {
-            return null;
+        if ($pos === PosisiBerkas::SATKER && $this->kembali_dari) {
+            $isi = ['Satuan kerja', 'Perlu memperbaiki tanggapan', 'Perbaiki sesuai catatan penolakan dan permintaan Setba, lalu kirim kembali.'];
         }
-        return [$butir->where('terpenuhi', true)->count(), $butir->count()];
-    }
-
-    public function dokumenLengkap(): bool
-    {
-        $p = $this->progresDokumen();
-        return $p === null || $p[0] === $p[1];
-    }
-
-    /**
-     * Boleh dikirim ke Setba.
-     *
-     * Kelunasan adalah tanda, bukan penguncian. Satuan kerja yang baru menyetor
-     * separuh tetap boleh mengirim berkasnya - pemulihan dana bisa memakan
-     * bertahun-tahun, dan menahan berkasnya sampai lunas berarti tidak ada yang
-     * bisa memeriksa kemajuannya selama itu. Yang ditahan hanya kalau dokumen
-     * yang diminta belum lengkap: tanpa dokumennya, tidak ada yang bisa
-     * ditelaah.
-     */
-    public function bolehDikirim(): bool
-    {
-        return $this->dokumenLengkap();
-    }
-
-    /* ---------- keadaan ---------- */
-
-    public function tuntas(): bool
-    {
-        return $this->posisi === PosisiBerkas::TUNTAS;
-    }
-
-    /**
-     * Sebutan posisi baris ini, dibaca bersama rekomendasinya.
-     *
-     * `PosisiBerkas::TUNTAS` sendirian berbunyi "Menunggu satuan kerja lain" —
-     * benar selama memang masih ada yang ditunggu. Begitu seluruh baris tuntas
-     * dan rekomendasinya naik ke tingkat dua, tidak ada lagi yang ditunggu,
-     * dan kalimat itu jadi keliru: pembacanya mengira berkasnya masih
-     * tertahan, padahal bagiannya sudah selesai.
-     */
-    public function sebutanPosisi(): string
-    {
-        if ($this->posisi !== PosisiBerkas::TUNTAS) {
-            return $this->posisi?->sebutanPemegang() ?? '—';
+        if ($pos === PosisiBerkas::TUNTAS) {
+            if (! $jenis->melewatiSiptl()) {
+                $isi = ['Selesai', 'Verifikasi Inspektorat selesai', 'Hasil verifikasi dan bukti tetap tersedia untuk pemantauan.'];
+                $selesai = true;
+            } elseif (! $this->siptl_tanggal) {
+                $isi = ['Setba', 'Siap dicatat ke SIPTL', 'Unggah berkas di aplikasi SIPTL, lalu catat tanggal unggah pada bagian Urusan SIPTL.'];
+            } elseif (in_array($this->status_bpk, [StatusTindakLanjut::SS, StatusTindakLanjut::TD], true)) {
+                $isi = ['Selesai', $this->status_bpk === StatusTindakLanjut::SS ? 'Sudah sesuai menurut BPK' : 'Tidak dapat ditindaklanjuti menurut BPK',
+                    'Hasil BPK dan surat pendukung dapat ditelusuri pada riwayat.'];
+                $selesai = true;
+            } elseif ($this->status_bpk === StatusTindakLanjut::BS) {
+                $isi = ['Setba', 'Menindaklanjuti hasil BPK', 'Periksa catatan BPK pada Urusan SIPTL. Pengembalian hanya untuk kewajiban satker yang perlu diperbaiki.'];
+            } else {
+                $isi = ['BPK / SIPTL', 'Menunggu penilaian BPK', 'Setba memantau SIPTL dan mencatat hasil BPK saat tersedia.'];
+            }
         }
 
-        $rek = $this->rekomendasi();
-        $adaYangDitunggu = $rek
-            ? $rek->daftarSasaran()->contains(fn ($x) => $x->posisi !== PosisiBerkas::TUNTAS)
-            : false;
+        [$pemegang, $judul, $langkah] = $isi ?? ['Belum diketahui', 'Posisi berkas belum tercatat', 'Periksa catatan perjalanan berkas.'];
 
-        return $adaYangDitunggu
-            ? PosisiBerkas::TUNTAS->sebutanPemegang()
-            : 'Tindak lanjutnya sudah memadai';
+        return compact('pemegang', 'judul', 'langkah', 'selesai');
     }
 
-    /**
-     * Rencana aksi yang mengikat baris ini — tanggal bentuk tindak lanjutnya.
-     *
-     * Satuan kerja yang kena dua bentuk memikul dua tanggal; yang ditagih
-     * lebih dulu itulah yang harus dikejar, dan itu urusan pemanggilnya.
-     * Baris ini cuma tahu tanggalnya sendiri.
-     */
-    /**
-     * Keadaan berkas baris ini, bukan nama unit yang memegangnya.
-     *
-     * "Setba" tidak menjawab apa yang sedang terjadi: berkas di mejanya bisa
-     * berarti tanggapan perlu ditinjau, atau hasil telaah UKI perlu
-     * diteruskan — dan keduanya pekerjaan yang berbeda oleh orang yang sama.
-     *
-     * Yang tuntas dibaca bersama rekomendasinya, sama seperti sebutanPosisi().
-     */
-    public function keadaanPosisi(): string
-    {
-        if ($this->posisi !== PosisiBerkas::TUNTAS) {
-            return $this->posisi?->label() ?? '—';
-        }
-
-        $rek = $this->rekomendasi();
-        $adaYangDitunggu = $rek
-            ? $rek->daftarSasaran()->contains(fn ($x) => $x->posisi !== PosisiBerkas::TUNTAS)
-            : false;
-
-        return $adaYangDitunggu
-            ? PosisiBerkas::TUNTAS->label()
-            : 'Tindak lanjutnya sudah memadai';
-    }
-
-    public function renaksi(): ?\Carbon\CarbonInterface
-    {
-        return $this->tindakan?->renaksi();
-    }
-
-    public function pemegang(): ?PeranPengguna
-    {
-        return $this->posisi?->pemegang();
-    }
-
-    public function diMeja(PeranPengguna $peran): bool
-    {
-        return $this->pemegang() === $peran;
-    }
-
-    /** Telaah terakhir yang berbunyi - itulah yang menetapkan hasilnya. */
-    public function telaahTerakhir(): ?Telaah
-    {
-        return $this->telaah->whereNotNull('hasil')->last();
-    }
-
-    /* ---------- saringan ---------- */
+    /* ================================================================
+       SARINGAN
+       ================================================================ */
 
     public function scopeMilik($q, ?int $satkerId)
     {
         return $satkerId ? $q->where('satker_id', $satkerId) : $q;
-    }
-
-    public function scopeDiMejaPeran($q, PeranPengguna $peran)
-    {
-        $posisi = collect(PosisiBerkas::tingkat1())
-            ->filter(fn ($p) => $p->pemegang() === $peran)
-            ->map->value->all();
-
-        return $q->whereIn('posisi', $posisi);
     }
 }

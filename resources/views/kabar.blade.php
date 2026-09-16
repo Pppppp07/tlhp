@@ -3,42 +3,41 @@
 @section('isi')
 @php
   use App\Support\Kabar;
-  use App\Support\Tampil;
+
+  $u = auth()->user();
 @endphp
 
-@php
-  $baris = function ($k, $redup) {
-    return [$k, $redup];
-  };
-@endphp
+<div class="body">
+  <div class="fokus">
+    <span class="jml">{{ $belum->count() }}</span>
+    <span class="apa">kabar belum dibaca</span>
+    @if($belum->isNotEmpty())
+      <form method="post" action="{{ route('kabar.semua') }}" style="margin-left:auto;align-self:center">
+        @csrf
+        <button type="submit" class="btn btn-s"><x-ikon n="Check" :s="13" /> Tandai semua terbaca</button>
+      </form>
+    @endif
+  </div>
 
-<div class="kartu" style="margin-bottom:18px;display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">
-  <span class="mono" style="font-size:26px;font-weight:700;line-height:1">{{ $belum->count() }}</span>
-  <span style="font-size:14px;font-weight:600">kabar belum dibaca</span>
-  <div style="flex:1"></div>
-  @if($belum->isNotEmpty())
-    <form method="post" action="{{ route('kabar.semua') }}">@csrf
-      <button class="btn btn-s" type="submit">Tandai semua terbaca</button>
-    </form>
-  @endif
+  <div style="display:grid;gap:10px;margin-bottom:24px">
+    @forelse($belum as $k)
+      @include('bagian.baris-kabar', ['k' => $k, 'redup' => false])
+    @empty
+      <div class="kosong">Tidak ada kabar baru.</div>
+    @endforelse
+  </div>
+
+  <button type="button" class="blokjudul" aria-expanded="false" aria-controls="kabar-sudah" data-buka-blok>
+    <span class="panah">›</span>
+    Sudah dibaca
+    <span class="n">{{ $sudah->count() }}</span>
+  </button>
+  <div id="kabar-sudah" style="display:grid;gap:10px" hidden>
+    @forelse($sudah as $k)
+      @include('bagian.baris-kabar', ['k' => $k, 'redup' => true])
+    @empty
+      <div class="kosong">Belum ada.</div>
+    @endforelse
+  </div>
 </div>
-
-@forelse($belum as $k)
-  @include('bagian/baris-kabar', ['k' => $k, 'redup' => false])
-@empty
-  <div class="kartu" style="color:var(--ink-3);font-size:13px">Tidak ada kabar baru.</div>
-@endforelse
-
-@if($sudah->isNotEmpty())
-  <details style="margin-top:20px">
-    <summary class="lbl" style="cursor:pointer;padding:6px 0">
-      Sudah dibaca &middot; {{ $sudah->count() }}
-    </summary>
-    <div style="margin-top:12px">
-      @foreach($sudah as $k)
-        @include('bagian/baris-kabar', ['k' => $k, 'redup' => true])
-      @endforeach
-    </div>
-  </details>
-@endif
 @endsection

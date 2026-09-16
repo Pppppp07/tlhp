@@ -1,9 +1,12 @@
 # Monitoring Tindak Lanjut Hasil Pemeriksaan (SIMTLHP)
 
-Aplikasi web untuk memantau tindak lanjut temuan LHA (Inspektorat) dan LHP (BPK)
+Aplikasi web untuk memantau tindak lanjut temuan LHP (BPK) dan LHA (Inspektorat)
 di lingkungan Sekretariat Badan.
 
-Laravel 13 · PHP 8.3 · SQLite untuk contoh, MySQL 8 untuk pemasangan sungguhan.
+Laravel 13 · PHP 8.3 · MySQL 8 (SQLite dipakai saat uji otomatis).
+
+Tampilan dan aturannya mengikuti prototipe (`../Prototipe`). Kalau keduanya
+berbeda, prototipe yang benar — dan bedanya dicatat di `../CATATAN-PERUBAHAN.md`.
 
 ---
 
@@ -25,88 +28,132 @@ diklik — surel dan sandinya terisi sendiri.
 
 | Surel | Peran | Yang bisa dilakukan |
 |---|---|---|
-| `setba@contoh.test` | Sekretariat Badan | melihat semuanya, meneruskan dan mengembalikan berkas |
-| `bandung@contoh.test` | Balai Bandung | mengisi tindak lanjut untuk rekomendasi satkernya |
-| `makassar@contoh.test` | Balai Makassar | sama, untuk satker lain |
-| `uki@contoh.test` | Unit Kepatuhan Intern | menelaah kecukupan bukti |
-| `inspektorat@contoh.test` | Inspektorat Jenderal | verifikasi akhir |
-| `pimpinan@contoh.test` | Pimpinan | hanya melihat |
+| `setba@contoh.test` | Sekretariat Badan | melihat semuanya, mencatat laporan baru, meneruskan berkas, mengurus SIPTL |
+| `uki@contoh.test` | Unit Kepatuhan Internal | menelaah kecukupan bukti |
+| `inspektorat@contoh.test` | Inspektorat | verifikasi akhir |
+| `pimpinan@contoh.test` | Pimpinan | hanya melihat; berandanya Ringkasan |
+| `admin@contoh.test` | Administrator | sama seperti Setba |
+
+Tiap satuan kerja punya akunnya sendiri, surelnya nama pendeknya:
+`medan@contoh.test`, `palembang@contoh.test`, `jakarta@contoh.test`,
+`bandung@contoh.test`, `yogyakarta@contoh.test`, `surabaya@contoh.test`,
+`banjarmasin@contoh.test`, `makassar@contoh.test`, `jayapura@contoh.test`,
+`sekretariat@contoh.test`, `talenta@contoh.test`, `sdackps@contoh.test`,
+`bmpipiw@contoh.test`, `manajemen@contoh.test`, `politeknik@contoh.test`,
+`penilaian@contoh.test`.
 
 Blok akun contoh di halaman masuk hanya ada pada pemasangan contoh. Sebelum
 dipakai sungguhan, hapus bagian itu dari `resources/views/masuk.blade.php`
 dan ganti seluruh sandi.
 
+## "Hari ini" pada peragaan
+
+Data contoh disusun untuk **17 Agustus 2026**, sama dengan prototipe. Tanggalnya
+dipatok lewat `.env`:
+
+```
+SIMTLHP_HARI_INI=2026-08-17
+SIMTLHP_DATA_CONTOH=true
+```
+
+Tanpa itu, tenggat dan keterlambatan dihitung dari tanggal komputer — dan kedua
+artefak yang diperagakan berdampingan akan menyebut keadaan berbeda untuk berkas
+yang sama. Kosongkan `SIMTLHP_HARI_INI` untuk pemakaian sungguhan.
+
 ## Mengembalikan data contoh
 
 Setelah dicoba-coba, datanya berubah. Untuk mengembalikan ke keadaan semula:
-**klik dua kali `atur-ulang.bat`.**
+**klik dua kali `atur-ulang.bat`** (sama dengan `php artisan migrate:fresh --seed`).
+
+Untuk mengosongkan berkasnya saja — data master dan akun tetap, seperti `?kosong`
+di prototipe:
+
+```bash
+php artisan tlhp:kosongkan
+```
 
 ---
 
 ## Alur yang bisa dicoba
 
-Coba runtut supaya kelihatan seluruh jalurnya:
+Coba runtut supaya kelihatan seluruh jalurnya. Yang bergerak adalah **baris
+penugasan** — satu satuan kerja pada satu bentuk tindak lanjut — bukan
+rekomendasinya.
 
-1. Masuk sebagai **Balai Bandung** → buka `REK-2026-014.1`
-   (Menarik kelebihan pembayaran dari 14 pegawai).
-   Isi tindak lanjutnya, centang dokumen, tambah satu baris pemulihan.
-   Perhatikan: tombol **Kirim ke Setba** baru bisa dipakai kalau dokumen sudah
-   lengkap *dan* nilainya sudah lunas. Kalau belum, **Simpan pembaruan** tetap
-   menyimpan kemajuannya tanpa memindahkan berkas.
-2. Masuk sebagai **Setba** → berkas yang tadi dikirim muncul di
-   *Perlu tindakan saya*. Teruskan ke UKI, atau kembalikan dengan alasan.
-3. Masuk sebagai **UKI** → telaah, kembalikan hasilnya ke Setba.
-4. Masuk sebagai **Inspektorat** → verifikasi.
-5. Kembali sebagai **Setba** → menu **Catat surat** di bilah kiri. Isi nomor surat,
-   tanggal, pejabat, lalu pilih hasil (SS/BS/TD) untuk tiap rekomendasi yang disebut
-   surat itu. **Baru di titik ini status resmi berubah.**
-   - Satu surat bisa memuat keputusan untuk beberapa rekomendasi sekaligus — begitulah
-     bentuk kertasnya, jadi begitu pula bentuk pencatatannya.
-   - Coba pilih SS untuk rekomendasi yang dokumennya belum lengkap. Sistem menolak,
-     dan baru mengizinkan setelah pengakuan "kewajibannya belum tuntas" dicentang.
-     Sistem tidak menghakimi isi surat — hanya memastikan keadaannya tercatat.
-6. Jalur **LHA** berhenti di situ. Jalur **LHP** belum: berkasnya masih harus diunggah
-   ke SIPTL, lalu BPK memberi penilaian akhir. Keduanya dicatat dari halaman rincian
-   rekomendasi, sebagai Setba.
+1. Masuk sebagai **Balai Wil. I Medan** → keranjang *Perlu saya kerjakan*.
+   Buka satu berkas, isi uraiannya, lampirkan tautan bukti untuk tiap dokumen
+   yang diminta, tambah baris pemulihan bila ada nilainya.
+   **Simpan draf** menyimpan tanpa memindahkan berkas; **Kirim ke Setba** baru
+   bisa dipakai kalau dokumennya sudah lengkap.
+2. Masuk sebagai **Setba** → berkas tadi muncul di *Perlu saya kerjakan*.
+   Teruskan ke UKI dengan surat pengantar (nomor, tanggal, perihal).
+3. Masuk sebagai **UKI** → putuskan memadai atau belum.
+   - Belum memadai: berkasnya pulang ke **meja pemberkasan ulang Setba**, bukan
+     langsung ke satuan kerjanya. Setba yang menyetel dokumen tambahan dan
+     mengirimnya ulang.
+   - Memadai: berkasnya kembali ke Setba untuk diteruskan ke Inspektorat.
+4. Masuk sebagai **Inspektorat** → verifikasi akhir. Memadai berarti tindak
+   lanjut itu selesai diperiksa.
+5. Kembali sebagai **Setba** → kartu **Urusan SIPTL** pada halaman rincian:
+   catat tanggal unggahnya, lalu salin hasil pemantauan BPK (SS atau BS).
+   - Tanggal unggah **dikunci** begitu tercatat, dan isiannya cuma muncul saat
+     memang sedang tahap itu.
+   - BPK menyatakan Belum Sesuai? Kirim ulang ke satuan kerjanya dari kartu yang
+     sama, berikut catatan dan dokumen yang diminta.
+6. Jalur **LHA** berhenti di langkah 4 — LHA tidak pernah sampai ke BPK.
 
-Yang perlu diperhatikan di sepanjang jalur itu: **status tidak pernah berubah
-karena orang mengeklik tombol.** Status hanya berubah ketika surat bernomor dari
-Inspektorat dicatat. Yang berubah karena klik hanyalah *posisi berkas* —
-berkasnya ada di meja siapa — dan *progres* — berapa dokumen terkumpul dan
-berapa rupiah sudah masuk.
+Draf satuan kerja yang mengendap lebih dari tujuh hari dikirim sendiri oleh
+`php artisan tlhp:kirim-draf` (terjadwal tiap hari 00.30), asal kewajibannya
+sudah tuntas. Berkas tidak boleh membusuk di satu meja sementara tenggatnya
+berjalan.
 
-## Tiga sumbu yang sengaja dipisah
+## Dua sumbu penilaian, satu sumbu posisi
 
-| Sumbu | Isi | Berubah karena |
+| Sumbu | Isi | Milik siapa |
 |---|---|---|
-| **Status** | BT · SS · BS · TD | hanya surat bernomor dari Inspektorat |
-| **Posisi** | berkas ada di meja siapa | perpindahan sehari-hari |
-| **Progres** | *n* dari *m* dokumen, Rp *x* dari Rp *y* | dihitung, tidak pernah diketik |
+| **Status SIPTL** | BT · BS · SS · TD | BPK, disalin Setba dari SIPTL. Hanya LHP |
+| **Hasil verifikasi** | Memadai / Belum memadai (LHA: Sesuai / Belum sesuai) | Inspektorat, lewat suratnya |
+| **Posisi berkas** | di meja siapa berkasnya menunggu | perpindahan sehari-hari |
 
-Memisahkan ketiganya membuat kenyataan "sudah 80% selesai tapi status resminya
-masih BT" bisa dicatat apa adanya — hal yang tidak bisa dilakukan kalau hanya
-ada satu kolom status.
+Ketiganya sengaja dipisah. Kenyataan "bagian BPSDM sudah beres tapi SIPTL masih
+Belum Sesuai karena unit lain" hanya bisa dicatat kalau sumbunya lebih dari satu.
 
 ## Yang tidak disimpan, tapi dihitung
 
-Status laporan, status temuan, nilai terpulihkan, sisa, dan progres tidak
-disimpan sebagai kolom. Semuanya disimpulkan dari rekomendasi di bawahnya setiap
-kali halaman dibuka. Kalau disimpan, cepat atau lambat angkanya akan berbeda
-dengan kenyataan.
+Status laporan, status temuan, nilai temuan, nilai terpulihkan, sisa, dan progres
+tidak disimpan sebagai kolom. Semuanya disimpulkan dari barisnya setiap kali
+halaman dibuka. Kalau disimpan, cepat atau lambat angkanya akan berbeda dengan
+kenyataan.
 
 ---
 
 ## Susunan berkas
 
 ```
-app/Enums/        9 enum — aturan domain ada di sini, bukan tersebar di controller
-app/Models/       17 model — Rekomendasi.php memuat sebagian besar aturannya
-app/Http/         8 controller — SuratController.php satu-satunya yang mengubah status
-app/Support/      pembantu tampilan (rupiah, tanggal, rel posisi)
-database/         19 migrasi + 2 seeder
+app/Enums/        aturan domain: posisi, status, hasil, sumber laporan, peran
+app/Models/       Rekomendasi.php memuat sebagian besar hitungannya
+app/Aksi/         satu berkas satu perbuatan: kirim, teruskan, putus, SIPTL
+app/Support/      Terlihat (hak lihat), Jejak (pencatat), Kabar, PetaData, Tampil
+app/Http/         pengendali tiap layar
+database/         migrasi, penyemai, dan data contoh (database/data/data-contoh.json)
 resources/views/  tampilan Blade
-public/css/       satu berkas gaya, palet mengikuti prototipe
+public/css/       simtlhp.css disalin dari prototipe; simtlhp-tambahan.css milik Laravel
+public/js/        satu berkas, penambah kenyamanan — bukan penopang
 ```
+
+Gaya di `public/css/simtlhp.css` diambil dari prototipe lewat
+`Prototipe/alat/salin-gaya.mjs`, awalan `.simt` dibuang. Jangan menyuntingnya
+tangan: yang perlu diubah sendiri ditulis di `simtlhp-tambahan.css`.
+
+## Menjalankan uji
+
+```bash
+php artisan test
+```
+
+67 uji: layar tiap peran, hak akses satuan kerja, rantai penuh satu berkas,
+Catat laporan baru, Pemberitahuan, Data master, Ringkasan, data contoh, dan
+aturan-aturan murni.
 
 ## Pindah ke MySQL
 
@@ -122,5 +169,5 @@ DB_PASSWORD=
 ```
 
 Buat basis datanya lebih dulu, lalu `php artisan migrate --seed`.
-Seluruh migrasi sudah memakai tipe yang aman di MySQL 8 — nilai rupiah disimpan
-sebagai `bigInteger` dalam satuan rupiah penuh, bukan `float`.
+Seluruh migrasi memakai tipe yang aman di MySQL 8 — nilai rupiah disimpan sebagai
+`bigInteger` dalam satuan rupiah penuh, bukan `float`.

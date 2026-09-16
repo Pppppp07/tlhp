@@ -5,36 +5,33 @@ namespace App\Support;
 use App\Enums\PeranPengguna;
 use App\Models\Laporan;
 use App\Models\Rekomendasi;
-use App\Models\Sasaran;
+use App\Models\Satker;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
- * Penyaring hak akses, ditaruh di satu tempat.
+ * Penyaring hak akses, ditaruh di satu tempat — padanan `laporanTerlihat`
+ * prototipe.
  *
  * Yang keluar dari kelas ini sudah dipangkas, jadi setiap perhitungan di
  * bawahnya — jumlah rekomendasi, nilai temuan, progres — mewarisi saringannya
- * tanpa perlu diingat satu per satu. Saringan yang harus diingat di tiap
- * tempat pemakaian cepat atau lambat terlupa di salah satunya.
+ * tanpa perlu diingat satu per satu.
  *
  * SATU-SATUNYA pemeriksa hak akses satuan kerja adalah `sasarans.satker_id`.
- * Jangan pernah menambahkan penyaring kedua di tempat lain: begitu ada dua,
- * keduanya akan berbeda, dan yang longgar yang menang.
  *
  * Yang boleh dilihat satuan kerja pada sebuah laporan ada dua macam:
  *
- *   1. rekomendasi yang punya sasaran untuknya — ini pekerjaannya;
+ *   1. rekomendasi yang punya baris untuknya — ini pekerjaannya;
  *   2. temuan yang terjadi di tempatnya walau rekomendasinya jatuh ke pihak
- *      lain — ini haknya untuk tahu, tapi bukan pekerjaannya. Ditandai
- *      `hanya_terperiksa` supaya tampilan bisa menyebutnya apa adanya.
+ *      lain — ini haknya untuk tahu, tapi bukan pekerjaannya
+ *      (`hanya_terperiksa`).
  *
- * Yang tidak masuk keduanya tidak pernah ikut terkirim ke peramban.
- *
- * Sejak satu rekomendasi bisa dipikul beberapa satuan kerja, memangkas
- * rekomendasinya saja tidak cukup: barisnya pun harus dipangkas. Kalau tidak,
- * Balai Medan membuka rekomendasi yang memang miliknya lalu membaca nominal,
- * posisi berkas, dan hasil telaah Politeknik PU di dalamnya.
+ * Di dalam rekomendasi yang dipikul bersama, bagian satuan kerja lain tidak
+ * pernah ikut ke tampilan: barisnya, setorannya, berkasnya, surat dan
+ * catatannya. Nama satuan kerja lain di dalam kalimat disamarkan. Keadaan
+ * rekomendasi seutuhnya tetap dihitung dari seluruh barisnya
+ * (`Rekomendasi::$barisSemua`), sama seperti prototipe.
  */
 class Terlihat
 {
@@ -57,29 +54,6 @@ class Terlihat
     }
 
     /* ================================================================
-       SASARAN — pintu masuk semua penyaringan
-       ================================================================ */
-
-    public function sasaran(): Builder
-    {
-        $q = Sasaran::query();
-        if (! $this->seluruhnya()) {
-            $q->where('satker_id', $this->satkerId());
-        }
-        return $q;
-    }
-
-    /** Baris sebuah rekomendasi yang boleh dibaca pengguna ini. */
-    public function barisRekomendasi(Rekomendasi $r): Collection
-    {
-        $baris = $r->daftarSasaran();
-        if ($this->seluruhnya()) {
-            return $baris;
-        }
-        return $baris->where('satker_id', $this->satkerId())->values();
-    }
-
-    /* ================================================================
        REKOMENDASI
        ================================================================ */
 
@@ -90,21 +64,19 @@ class Terlihat
             $satker = $this->satkerId();
             $q->whereHas('sasaran', fn ($s) => $s->where('sasarans.satker_id', $satker));
         }
+
         return $q;
     }
 
     public function bolehLihatRekomendasi(Rekomendasi $r): bool
     {
-        return $this->seluruhnya()
-            || $r->daftarSasaran()->contains('satker_id', $this->satkerId());
+        return $this->seluruhnya() || $r->dituju($this->satkerId());
     }
 
     /**
-     * Memangkas baris sebuah rekomendasi yang sudah dimuat, lalu mengecilkan
-     * nilai tagihannya jadi bagian pengguna ini saja.
-     *
-     * Angka utuhnya menyebut berapa besar beban satuan kerja sebelah — dan itu
-     * bukan urusannya, walau rekomendasinya satu.
+     * Memangkas sebuah rekomendasi yang sudah dimuat, lalu mengecilkan nilai
+     * tagihannya jadi bagian pengguna ini saja. Model yang sudah dipangkas
+     * TIDAK BOLEH disimpan — ia hanya untuk ditampilkan.
      */
     public function pangkasRekomendasi(Rekomendasi $r): Rekomendasi
     {
@@ -112,39 +84,76 @@ class Terlihat
             return $r;
         }
 
-        $satker = $this->satkerId();
-        $baris = $r->daftarSasaran()->where('satker_id', $satker)->values();
+        $satker = $this->pengguna->satker;
+        $semua = $r->daftarSasaran();
+        $r->barisSemua = $semua;
 
+        $baris = $semua->where('satker_id', $satker->id)->values();
         $r->setRelation('sasaran', $baris);
         $r->nilai_pulih = (int) $baris->sum('nilai');
 
-        /* Baris di dalam rekomendasi yang dipikul bersama ikut dipangkas.
-           Tanpa ini satuan kerja bisa membaca bukti setor, berkas, surat, dan
-           rekam jejak satuan kerja sebelah — dan halaman laporan
-           menjumlahkannya jadi angka yang bukan miliknya. */
-        $id = $baris->pluck('id')->all();
+        /* Baris yang ikut termuat lewat tindakannya dipangkas juga. */
+        if ($r->relationLoaded('tindakan')) {
+            $r->tindakan->each(function ($tk) use ($satker) {
+                if ($tk->relationLoaded('sasaran')) {
+                    $tk->setRelation('sasaran', $tk->sasaran->where('satker_id', $satker->id)->values());
+                }
+            });
+        }
 
-        foreach (['tanggapan', 'permintaanDokumen', 'pemulihan', 'pengembalian', 'telaah'] as $rel) {
+        $id = $baris->pluck('id')->all();
+        $milikku = fn ($x) => $x->sasaran_id === null || in_array($x->sasaran_id, $id, true);
+
+        foreach (['tanggapan', 'pemulihan', 'pengembalian', 'tolakanBpk'] as $rel) {
             if ($r->relationLoaded($rel)) {
-                $r->setRelation($rel, $r->getRelation($rel)
-                    ->filter(fn ($x) => in_array($x->sasaran_id, $id, true))->values());
+                $r->setRelation($rel, $r->getRelation($rel)->filter($milikku)->values());
             }
         }
 
-        /* Riwayat tingkat 2 tidak punya sasaran dan memang boleh dibaca semua
-           pihak — ia gerak rekomendasinya sendiri, bukan pekerjaan satu satker. */
-        if ($r->relationLoaded('riwayat')) {
-            $r->setRelation('riwayat', $r->getRelation('riwayat')
-                ->filter(fn ($x) => $x->sasaran_id === null || in_array($x->sasaran_id, $id, true))
-                ->values());
+        if ($r->relationLoaded('tanggapan')) {
+            $r->tanggapan->each(fn ($x) => $x->uraian = self::teksUntuk($x->uraian, $satker));
         }
 
-        /* Lampiran tanpa sasaran menempel pada rekomendasi seutuhnya. Surat
-           pemeriksaan aslinya TIDAK termasuk di sini — ia menempel pada
-           laporan, dan halaman laporan yang menahannya. */
+        if ($r->relationLoaded('permintaanDokumen')) {
+            $r->setRelation('permintaanDokumen', $r->permintaanDokumen->filter($milikku)->values()
+                ->each(fn ($x) => $x->alasan = self::teksUntuk($x->alasan, $satker)));
+        }
+
+        if ($r->relationLoaded('telaah')) {
+            $r->setRelation('telaah', $r->telaah->filter($milikku)->values()
+                ->each(fn ($x) => $x->catatan = self::teksUntuk(self::catatanUntuk($x->catatan, $satker), $satker)));
+        }
+
+        if ($r->relationLoaded('keputusan')) {
+            $r->setRelation('keputusan', $r->keputusan->filter($milikku)->values()->each(function ($x) use ($satker) {
+                $x->catatan = self::teksUntuk(self::catatanUntuk($x->catatan, $satker), $satker);
+                $x->catatan_satker = collect($x->catatan_satker ?? [])
+                    ->filter(fn ($c) => ($c['satker_id'] ?? null) === $satker->id)->values()->all();
+            }));
+        }
+
+        if ($r->relationLoaded('surat')) {
+            $r->setRelation('surat', $r->surat->filter($milikku)->values()->each(function ($x) use ($satker) {
+                $x->perihal = self::teksUntuk($x->perihal, $satker);
+                $x->catatan = self::teksUntuk($x->catatan, $satker);
+            }));
+        }
+
+        /* Riwayat aktivitas milik rekomendasi, bukan milik baris — disaring
+           menurut pelakunya, dan kalimatnya disamarkan. */
+        if ($r->relationLoaded('riwayat')) {
+            $r->setRelation('riwayat', $r->riwayat
+                ->reject(fn ($x) => self::punyaSatkerLain($x->label_aktor, $satker))
+                ->values()
+                ->each(fn ($x) => $x->aksi = self::teksUntuk($x->aksi, $satker)));
+        }
+
+        /* Surat pemeriksaan asli tidak pernah diberikan ke satuan kerja: satu
+           surat memuat temuan seluruh satuan kerja. */
         if ($r->relationLoaded('lampiran')) {
-            $r->setRelation('lampiran', $r->getRelation('lampiran')
-                ->filter(fn ($x) => $x->sasaran_id === null || in_array($x->sasaran_id, $id, true))
+            $r->setRelation('lampiran', $r->lampiran
+                ->reject(fn ($x) => $x->surat_asli || self::punyaSatkerLain($x->label_oleh, $satker))
+                ->filter($milikku)
                 ->values());
         }
 
@@ -157,7 +166,7 @@ class Terlihat
 
     /**
      * Laporan yang menyangkut pengguna ini. Bagi satuan kerja: yang punya
-     * sasaran untuknya, atau punya temuan yang terjadi di tempatnya.
+     * baris untuknya, atau punya temuan yang terjadi di tempatnya.
      */
     public function laporan(): Builder
     {
@@ -175,24 +184,10 @@ class Terlihat
         });
     }
 
-    public function bolehLihatLaporan(Laporan $l): bool
-    {
-        if ($this->seluruhnya()) {
-            return true;
-        }
-        $satker = $this->satkerId();
-
-        return $l->temuan->contains(fn ($t) => $t->mengenai($satker))
-            || $l->temuan->contains(fn ($t) => $t->rekomendasi->contains(
-                fn ($r) => $r->daftarSasaran()->contains('satker_id', $satker)));
-    }
-
     /**
      * Memangkas isi sebuah laporan yang sudah dimuat. Temuan yang tidak
-     * menyangkut pengguna dibuang seluruhnya; temuan yang menyangkutnya hanya
-     * sebagai tempat kejadian dipertahankan tapi rekomendasinya dikosongkan —
-     * ia berhak tahu ada temuan di tempatnya, bukan berhak membaca pekerjaan
-     * satuan kerja lain.
+     * menyangkut pengguna dibuang; temuan yang menyangkutnya hanya sebagai
+     * tempat kejadian dipertahankan tanpa rekomendasi.
      */
     public function pangkas(Laporan $l): Laporan
     {
@@ -200,40 +195,119 @@ class Terlihat
             return $l;
         }
 
-        $satker = $this->satkerId();
+        $satker = $this->pengguna->satker;
 
         $temuan = $l->temuan->map(function ($t) use ($satker) {
             $punyaku = $t->rekomendasi
-                ->filter(fn ($r) => $r->daftarSasaran()->contains('satker_id', $satker))
+                ->filter(fn ($r) => $r->dituju($satker->id))
                 ->map(fn ($r) => $this->pangkasRekomendasi($r))
                 ->values();
 
-            if ($punyaku->isEmpty() && ! $t->mengenai($satker)) {
+            if ($punyaku->isEmpty() && ! $t->mengenai($satker->id)) {
                 return null;
             }
 
             $t->setRelation('rekomendasi', $punyaku);
+            $t->setRelation('satkers', $t->satkers->where('id', $satker->id)->values()
+                ->whenEmpty(fn () => collect([$satker])));
+            $t->nilai = (int) $punyaku->sum('nilai_pulih');
             $t->hanya_terperiksa = $punyaku->isEmpty();
 
             return $t;
         })->filter()->values();
 
         $l->setRelation('temuan', $temuan);
+        $l->setRelation('lampiran', collect());
 
         return $l;
+    }
+
+    public function bolehLihatLaporan(Laporan $l): bool
+    {
+        if ($this->seluruhnya()) {
+            return true;
+        }
+        $satker = $this->satkerId();
+
+        return $l->temuan->contains(fn ($t) => $t->mengenai($satker)
+            || $t->rekomendasi->contains(fn ($r) => $r->dituju($satker)));
     }
 
     /** Daftar laporan yang sudah dipangkas isinya, siap ditampilkan. */
     public function daftarLaporan(array $muat = []): Collection
     {
-        $bawaan = ['temuan.satkers', 'temuan.rekomendasi.sasaran.satker'];
+        $bawaan = ['temuan.satkers', 'temuan.kategori', 'temuan.kategoriIntern',
+            'temuan.rekomendasi.sasaran.satker', 'temuan.rekomendasi.tindakan.bentuk',
+            'temuan.rekomendasi.pemulihan', 'temuan.rekomendasi.tolakanBpk',
+            'temuan.rekomendasi.permintaanDokumen.item', 'temuan.rekomendasi.riwayat',
+            'temuan.laporan', 'lampiran'];
 
+        /* Urutan dasarnya urutan pencatatan, sama dengan prototipe — urutan
+           yang seri pada tiap penyortiran jatuh ke sini. */
         return $this->laporan()
             ->with(array_unique(array_merge($bawaan, $muat)))
-            ->orderByDesc('tgl_terima')
+            ->orderBy('id')
             ->get()
             ->map(fn ($l) => $this->pangkas($l))
             ->filter(fn ($l) => $l->temuan->isNotEmpty())
             ->values();
+    }
+
+    /* ================================================================
+       PENYAMARAN KALIMAT
+       ================================================================ */
+
+    /** Nama panjang dan pendek seluruh satuan kerja, yang terpanjang dulu. */
+    private static function semuaNama(): array
+    {
+        static $nama = null;
+
+        return $nama ??= Satker::all()
+            ->flatMap(fn ($s) => [$s->nama, $s->nama_pendek])
+            ->filter()->unique()
+            ->sortByDesc(fn ($x) => mb_strlen($x))
+            ->values()->all();
+    }
+
+    /** Nama itu milik satuan kerja lain (bukan "Setba", bukan saya). */
+    public static function punyaSatkerLain(?string $nama, Satker $saya): bool
+    {
+        $nama = trim((string) $nama);
+
+        return $nama !== '' && in_array($nama, self::semuaNama(), true)
+            && $nama !== $saya->nama && $nama !== $saya->nama_pendek;
+    }
+
+    /**
+     * Deret nama satuan kerja di dalam kalimat diganti: nama saya kalau saya
+     * termasuk, selain itu "satuan kerja yang dituju". Kalimat "Rekomendasi
+     * dikirim ke Balai Wil. I Medan, Politeknik PU" tidak boleh memberi tahu
+     * Medan siapa lagi yang kebagian.
+     */
+    public static function teksUntuk(?string $teks, Satker $saya): ?string
+    {
+        if (! $teks) {
+            return $teks;
+        }
+        $pola = implode('|', array_map(fn ($x) => preg_quote($x, '/'), self::semuaNama()));
+        $deret = "/(?:{$pola})(?:\\s*(?:,|dan)\\s*(?:{$pola}))*/u";
+
+        return preg_replace_callback($deret, function ($m) use ($saya) {
+            return str_contains($m[0], $saya->nama) || str_contains($m[0], $saya->namaPendek())
+                ? $saya->namaPendek()
+                : 'satuan kerja yang dituju';
+        }, $teks);
+    }
+
+    /** Buang penggalan " · " yang berawalan nama satuan kerja lain. */
+    public static function catatanUntuk(?string $teks, Satker $saya): string
+    {
+        return collect(explode(' · ', (string) $teks))
+            ->reject(function ($bagian) use ($saya) {
+                $b = mb_strpos($bagian, ': ');
+
+                return $b !== false && self::punyaSatkerLain(mb_substr($bagian, 0, $b), $saya);
+            })
+            ->join(' · ');
     }
 }

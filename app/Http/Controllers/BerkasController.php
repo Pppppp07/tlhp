@@ -14,33 +14,32 @@ class BerkasController extends Controller
      */
     public function show(Lampiran $lampiran)
     {
-        if ($lampiran->ditarik()) {
-            abort(410, 'Berkas ini sudah ditarik dan isinya dihapus.');
-        }
-
-        /* Satuan kerja hanya boleh membuka berkas yang menyangkut barisnya
-           sendiri. Berkas tanpa sasaran menempel pada rekomendasi atau laporan
-           seutuhnya — dan yang terakhir itu justru surat pemeriksaan aslinya,
-           yang memuat temuan seluruh satuan kerja. */
         if (auth()->user()->peran === PeranPengguna::SATKER) {
             $satker = auth()->user()->satker_id;
 
-            if ($lampiran->laporan_id && ! $lampiran->sasaran_id) {
-                abort(403, 'Surat pemeriksaan asli memuat temuan seluruh satuan kerja.');
-            }
+            /* Surat pemeriksaan asli tidak pernah sampai ke satuan kerja: satu
+               surat memuat temuan seluruh satuan kerja, dan yang lain bukan
+               urusannya. Penyaring hak lihat sudah membuangnya dari tampilan;
+               ini penjaga terakhirnya, untuk yang menebak alamatnya sendiri. */
+            abort_if($lampiran->surat_asli, 403,
+                'Surat pemeriksaan asli memuat temuan seluruh satuan kerja.');
 
+            /* Berkas milik satu baris jelas pemiliknya; yang menempel pada
+               rekomendasi cukup menyangkut salah satu barisnya. */
             if ($lampiran->sasaran_id) {
                 abort_unless($lampiran->sasaran?->satker_id === $satker, 403,
                     'Berkas ini milik satuan kerja lain.');
             } elseif ($rek = $lampiran->rekomendasi) {
                 abort_unless($rek->daftarSasaran()->contains('satker_id', $satker), 403,
                     'Berkas ini milik satuan kerja lain.');
+            } elseif ($lampiran->laporan_id) {
+                abort(403, 'Berkas laporan hanya dibuka Setba.');
             }
         }
 
         /* Data contoh belum punya berkas sungguhan di penyimpanan, jadi yang
-           ditampilkan keterangannya. Begitu unggahan sungguhan dipasang,
-           baris ini berganti Storage::download(). */
+           ditampilkan keterangannya. Begitu unggahan sungguhan dipasang, baris
+           ini berganti Storage::download(). */
         return view('berkas', ['b' => $lampiran]);
     }
 }

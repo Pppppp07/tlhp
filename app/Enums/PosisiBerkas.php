@@ -3,114 +3,97 @@
 namespace App\Enums;
 
 /**
- * Di meja siapa berkasnya berada. Sumbu terpisah dari status.
+ * Di meja siapa berkas satu tindak lanjut satuan kerja berada.
  *
- * Sembilan posisi ini terbagi dua tingkat, dan pembagian itu bukan penggolongan
- * di atas kertas — keduanya disimpan di kolom yang berbeda:
+ * Satu rel, milik BARIS PENUGASAN (`sasarans.posisi`) — bukan milik
+ * rekomendasinya. Rekomendasi tidak menempuh proses apa pun: yang dikirim,
+ * ditelaah, dan diunggah ke SIPTL adalah tindak lanjut tiap satuan kerja.
  *
- *   TINGKAT 1  sasarans.posisi       ditempuh berkas tiap satuan kerja sendiri
- *              satker → setba_tinjau → uki → setba_teruskan → inspektorat → tuntas
+ *   satker → setba_kembali → setba_tinjau → uki → setba_teruskan → inspektorat → tuntas
  *
- *   TINGKAT 2  rekomendasis.posisi   ditempuh rekomendasinya, baru berjalan
- *              siptl → bpk → selesai   sesudah SELURUH sasaran tuntas
+ * Dulu ada tingkat dua sesudah `tuntas` — siptl → bpk → selesai — yang disimpan
+ * di `rekomendasis.posisi`. Dibuang bersama kolomnya (prototipe, 10 Sep):
+ * unggahan SIPTL dan status BPK kini dicatat per baris, sebagai catatan, bukan
+ * sebagai posisi.
  *
- * Balai Medan bisa sudah di inspektorat sementara Politeknik PU masih di
- * satker. Rekomendasi yang memikul keduanya belum bergerak sama sekali —
- * rekomendasis.posisi bernilai NULL, dan itulah penanda gerbangnya tertutup.
- *
- * Jalur LHA berhenti di tuntas: tidak ada SIPTL, tidak ada BPK.
+ * URUTAN CASE ADALAH URUTAN RANTAI. `urutan()` membacanya dari sini, dan
+ * pembanding "mana yang paling tertinggal" memakai urutan itu — bukan nomor
+ * tahap, yang seri di dua tempat (satker dan setba_tinjau sama-sama tahap 2).
  */
 enum PosisiBerkas: string
 {
-    /* ---- tingkat 1: berkas tiap satuan kerja ---- */
     case SATKER          = 'satker';
+    /* Ditolak UKI, Inspektorat, atau BPK. Berkasnya TIDAK langsung pulang ke
+       satuan kerja: Setba yang menerima penolakannya, lalu mengirimkannya
+       ulang bersama alasan dan dokumen yang diminta. Tahapnya tetap 2 dan
+       bukan transit — tindak lanjutnya memang sedang kembali di tahap
+       tanggapan; yang berbeda cuma siapa yang memegangnya. */
+    case SETBA_KEMBALI   = 'setba_kembali';
     case SETBA_TINJAU    = 'setba_tinjau';
     case UKI             = 'uki';
     case SETBA_TERUSKAN  = 'setba_teruskan';
     case INSPEKTORAT     = 'inspektorat';
     case TUNTAS          = 'tuntas';
 
-    /* ---- tingkat 2: rekomendasinya sendiri ---- */
-    case SIPTL           = 'siptl';
-    case BPK             = 'bpk';
-    case SELESAI         = 'selesai';
-
+    /**
+     * Labelnya menyebut POSISI, bukan putusan. `TUNTAS` dulu berbunyi
+     * "Tindak lanjutnya sudah memadai" — meminjam kata milik sumbu
+     * Inspektorat, yang punya kolomnya sendiri persis di sebelahnya.
+     */
     public function label(): string
     {
         return match ($this) {
             self::SATKER         => 'Menunggu tanggapan satuan kerja',
+            self::SETBA_KEMBALI  => 'Dikembalikan — menunggu dikirim ulang Setba',
             self::SETBA_TINJAU   => 'Tanggapan perlu ditinjau Setba',
             self::UKI            => 'Menunggu telaah UKI',
             self::SETBA_TERUSKAN => 'Hasil telaah UKI perlu diteruskan',
             self::INSPEKTORAT    => 'Menunggu verifikasi Inspektorat',
-            self::TUNTAS         => 'Tindak lanjutnya sudah memadai, menunggu satuan kerja lain',
-            self::SIPTL          => 'Perlu diunggah Setba ke SIPTL',
-            self::BPK            => 'Menunggu BPK — dicek Setba di SIPTL',
-            self::SELESAI        => 'Sudah ditetapkan',
+            self::TUNTAS         => 'Sudah selesai diperiksa',
         };
     }
 
-    /** Tingkat 1 atau 2 — menentukan kolom mana yang menyimpannya. */
-    public function tingkat(): int
+    /** Letaknya di rantai, dari 0. */
+    public function urutan(): int
     {
-        return in_array($this, [self::SIPTL, self::BPK, self::SELESAI], true) ? 2 : 1;
-    }
-
-    /** @return list<self> */
-    public static function tingkat1(): array
-    {
-        return array_values(array_filter(self::cases(), fn ($p) => $p->tingkat() === 1));
-    }
-
-    /** @return list<self> */
-    public static function tingkat2(): array
-    {
-        return array_values(array_filter(self::cases(), fn ($p) => $p->tingkat() === 2));
+        return array_search($this, self::cases(), true);
     }
 
     /**
-     * Peran yang berkasnya sedang di tangannya.
-     *
-     * Null berarti tidak dipegang siapa pun — entah karena sudah ditetapkan,
-     * atau karena bagian satuan kerja ini sudah beres dan yang ditunggu adalah
-     * satuan kerja lain. Permintaan perubahan pada keadaan itu diputus Setba.
+     * Peran yang berkasnya sedang di tangannya. Null pada `TUNTAS`: berkasnya
+     * sudah berhenti berpindah meja — urusan SIPTL-nya dibaca terpisah.
      */
     public function pemegang(): ?PeranPengguna
     {
         return match ($this) {
             self::SATKER         => PeranPengguna::SATKER,
+            self::SETBA_KEMBALI,
             self::SETBA_TINJAU,
-            self::SETBA_TERUSKAN,
-            self::SIPTL          => PeranPengguna::SETBA,
+            self::SETBA_TERUSKAN => PeranPengguna::SETBA,
             self::UKI            => PeranPengguna::UKI,
             self::INSPEKTORAT    => PeranPengguna::INSPEKTORAT,
-            default              => null,
+            self::TUNTAS         => null,
         };
     }
 
-    /**
-     * Sebutan pemegangnya untuk dibaca sekilas di kolom "Posisi berkas".
-     * Yang perlu terbaca adalah unit kerjanya, bukan kalimat panjangnya.
-     */
-    public function sebutanPemegang(): string
+    /** Sebutan pemegangnya di rel prototipe: "Balai", "Setba", "UKI", "Inspektorat", "—". */
+    public function pegang(): string
     {
         return match ($this) {
-            self::TUNTAS  => 'Menunggu satuan kerja lain',
-            self::SELESAI => 'Selesai',
-            self::BPK     => 'BPK',
-            default       => $this->pemegang()?->pendek() ?? '—',
+            self::SATKER => 'Balai',
+            self::TUNTAS => '—',
+            default      => $this->pemegang()->pendek(),
         };
     }
 
-    /** Tahap keberapa pada rel. Jalur LHA berhenti di tahap 5. */
+    /** Tahap keberapa pada rel lima tahap. */
     public function tahap(): int
     {
         return match ($this) {
-            self::SATKER, self::SETBA_TINJAU        => 2,
-            self::UKI, self::SETBA_TERUSKAN         => 3,
-            self::INSPEKTORAT                       => 4,
-            self::TUNTAS                            => 5,
-            self::SIPTL, self::BPK, self::SELESAI   => 6,
+            self::SATKER, self::SETBA_KEMBALI, self::SETBA_TINJAU => 2,
+            self::UKI, self::SETBA_TERUSKAN                       => 3,
+            self::INSPEKTORAT                                     => 4,
+            self::TUNTAS                                          => 5,
         };
     }
 
@@ -124,20 +107,20 @@ enum PosisiBerkas: string
         return in_array($this, [self::SETBA_TINJAU, self::SETBA_TERUSKAN], true);
     }
 
-    /**
-     * Keadaan tahap ke-$n bagi berkas yang sedang di posisi ini.
-     *
-     * @return 'selesai'|'aktif'|'antre'|'belum'
-     */
-    public function keadaanTahap(int $n): string
-    {
-        if ($this === self::SELESAI) {
-            return 'selesai';
-        }
-        $kini = $this->transit() ? $this->tahap() + 1 : $this->tahap();
+    /** Lima tahap, sama untuk LHP dan LHA. */
+    public const TAHAP = ['Registrasi', 'Tanggapan balai', 'Telaah UKI',
+        'Verifikasi Inspektorat', 'Surat & penetapan'];
 
-        if ($n < $kini) return 'selesai';
-        if ($n > $kini) return 'belum';
-        return $this->transit() ? 'antre' : 'aktif';
+    /** Yang paling tertinggal dari sederet posisi. Kosong berarti masih di satuan kerja. */
+    public static function palingBelakang(iterable $posisi): self
+    {
+        $terkecil = null;
+        foreach ($posisi as $p) {
+            if ($terkecil === null || $p->urutan() < $terkecil->urutan()) {
+                $terkecil = $p;
+            }
+        }
+
+        return $terkecil ?? self::SATKER;
     }
 }

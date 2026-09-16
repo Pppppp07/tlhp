@@ -5,11 +5,13 @@ namespace App\Support;
 use App\Enums\PeranPengguna;
 use App\Models\Notifikasi;
 use App\Models\Rekomendasi;
+use App\Models\Tindakan;
 use App\Models\User;
 use Illuminate\Support\Collection;
 
 /**
- * Menulis dan membaca pemberitahuan.
+ * Menulis dan membaca pemberitahuan — padanan `kabari` dan `notifSaya`
+ * prototipe.
  *
  * `blok` menunjuk bagian mana di halaman rincian yang berubah karena tindakan
  * ini. Tanpa itu kabar hanya bisa mengantar ke halamannya, dan pembacanya
@@ -18,72 +20,122 @@ use Illuminate\Support\Collection;
 class Kabar
 {
     /* Nama bagian pada halaman rincian, dipakai sebagai keterangan tujuan pada
-       baris kabar. Namanya sama persis dengan judul di halaman itu — kalau
-       berbeda, orang mengira sampai di tempat yang salah. */
+       baris kabar. Namanya sama persis dengan judul di halaman itu — sama
+       dengan `NAMA_BAGIAN` prototipe. Kabar SIPTL (`r-siptl`) sengaja tanpa
+       keterangan tujuan, seperti prototipe: menekannya tetap membuka berkasnya
+       dan menunjuk bagiannya. */
     public const BAGIAN = [
         'r-kepala'       => 'Kepala rekomendasi',
-        'r-tindaklanjut' => 'Rekam jejak tindak lanjut',
-        'r-kembali'      => 'Pernah dikembalikan',
-        'r-dokumen'      => 'Kelengkapan dokumen yang diminta',
+        'r-perkembangan' => 'Perkembangan',
+        'r-tindaklanjut' => 'Laporan satuan kerja',
+        'r-dokumen'      => 'Perkembangan tiap satuan kerja',
         'r-pemulihan'    => 'Pemulihan nilai',
-        'r-telaah'       => 'Hasil telaah',
-        'r-verifikasi'   => 'Riwayat verifikasi',
-        'r-jejak'        => 'Jejak perpindahan berkas',
+        'r-riwayat'      => 'Riwayat status tindak lanjut',
+        'r-ulang'        => 'Tindak lanjut ulang atas penolakan BPK',
+        'r-tindakan'     => 'Tindakan',
+        'r-arsip'        => 'Arsip rekomendasi',
+        'r-jejak'        => 'Riwayat aktivitas',
     ];
 
     /**
-     * @param  list<PeranPengguna>  $untuk  peran yang berwenang atau berkepentingan
+     * @param  list<PeranPengguna>  $untuk      peran yang berwenang atau berkepentingan
+     * @param  list<int>|null       $satkerIds  satuan kerja yang dikabari; kosong = seluruh satuan kerja rekomendasinya
+     * @param  bool                 $sistem     dikirim perintah terjadwal — belum dibaca siapa pun
      */
-    public static function tulis(Rekomendasi $r, string $aksi, array $untuk, ?string $blok = null): Notifikasi
+    public static function tulis(Rekomendasi $r, string $aksi, array $untuk, ?string $blok = null,
+        ?array $satkerIds = null, ?Tindakan $tindakan = null, bool $sistem = false,
+        ?string $pelaku = null): Notifikasi
     {
-        $pelaku = auth()->user();
+        $pengguna = $sistem ? null : auth()->user();
 
         $kabar = Notifikasi::create([
             'rekomendasi_id' => $r->id,
-            'waktu' => now(),
-            'label_pelaku' => $pelaku?->peran === PeranPengguna::SATKER
-                ? ($pelaku->satker?->namaPendek() ?? 'Satuan kerja')
-                : ($pelaku?->peran->nama() ?? 'Sistem'),
-            'aksi' => $aksi,
-            'untuk_peran' => array_map(fn ($p) => $p->value, $untuk),
-            /* Kabar ditujukan ke satuan kerja tertentu hanya kalau
-               rekomendasinya memang cuma menyangkut satu. Rekomendasi yang
-               dipikul beramai-ramai dikabarkan ke semuanya — menunjuk salah
-               satu berarti yang lain tidak pernah tahu. */
-            'satker_id' => $r->daftarSasaran()->pluck('satker_id')->unique()->count() === 1
-                ? $r->daftarSasaran()->first()?->satker_id
-                : null,
-            'blok' => $blok,
+            /* Bentuk tindak lanjutnya disebut hanya kalau rekomendasinya punya
+               lebih dari satu — kalau cuma satu, menyebutnya menambah bacaan. */
+            'tindakan_id'    => $tindakan && $r->tindakan()->count() > 1 ? $tindakan->id : null,
+            'waktu'          => now(),
+            'label_pelaku'   => $pelaku ?? self::labelPelaku($pengguna),
+            'aksi'           => $aksi,
+            'untuk_peran'    => array_values(array_unique(array_map(fn ($p) => $p->value, $untuk))),
+            'blok'           => $blok,
         ]);
 
-        /* Yang mengerjakannya sudah tahu — kabar itu untuk pihak lain. Tanpa
-           ini tiap tindakan memantulkan lonceng balik ke wajah orang yang baru
-           saja menekan tombolnya. */
-        if ($pelaku) {
-            $kabar->dibaca()->attach($pelaku->id, ['dibaca_pada' => now()]);
+        $satker = $satkerIds ?? $r->semuaBaris()->pluck('satker_id')->unique()->values()->all();
+        $kabar->satker()->attach(array_values(array_unique($satker)));
+
+        /* Yang mengerjakannya sudah tahu — kabar itu untuk pihak lain. Kiriman
+           otomatis tidak punya pelaku, jadi belum terbaca oleh siapa pun
+           (W16 prototipe). */
+        if ($pengguna) {
+            $kabar->dibaca()->attach($pengguna->id, ['dibaca_pada' => now()]);
         }
 
         return $kabar;
     }
 
-    /** Kabar yang menyangkut pengguna ini, terbaru dulu. */
-    public static function untuk(User $u, int $batas = 60): Collection
+    public static function labelPelaku(?User $u): string
     {
-        return Notifikasi::with('rekomendasi.temuan.laporan', 'satker')
-            ->whereJsonContains('untuk_peran', $u->peran->value)
-            ->when($u->peran === PeranPengguna::SATKER,
-                fn ($q) => $q->where('satker_id', $u->satker_id))
-            ->orderByDesc('waktu')
-            ->limit($batas)
+        if (! $u) {
+            return 'Sistem';
+        }
+
+        return $u->peran === PeranPengguna::SATKER
+            ? ($u->satker?->namaPendek() ?? 'Satuan kerja')
+            : $u->peran->pendek();
+    }
+
+    /** Kabar yang menyangkut pengguna ini, terbaru dulu. */
+    public static function untuk(User $u): Collection
+    {
+        return self::kueri($u)
+            ->with('rekomendasi.temuan.laporan', 'satker', 'tindakan.bentuk', 'dibaca')
+            ->orderByDesc('waktu')->orderByDesc('id')
             ->get();
     }
 
     public static function belumDibaca(User $u): int
     {
-        return Notifikasi::whereJsonContains('untuk_peran', $u->peran->value)
-            ->when($u->peran === PeranPengguna::SATKER,
-                fn ($q) => $q->where('satker_id', $u->satker_id))
+        return self::kueri($u)
             ->whereDoesntHave('dibaca', fn ($q) => $q->where('users.id', $u->id))
             ->count();
+    }
+
+    public static function sudahDibaca(Notifikasi $n, User $u): bool
+    {
+        return $n->dibaca->contains('id', $u->id);
+    }
+
+    /** Kabar ini memang ditujukan kepada pengguna ini. */
+    public static function boleh(Notifikasi $n, User $u): bool
+    {
+        return self::kueri($u)->whereKey($n->id)->exists();
+    }
+
+    /**
+     * Satuan kerja yang disebut pada baris kabar. Satuan kerja hanya melihat
+     * namanya sendiri — kabar bersama tidak boleh membocorkan siapa lagi yang
+     * kebagian.
+     */
+    public static function sebutSatker(Notifikasi $n, User $u): string
+    {
+        $satker = $u->peran === PeranPengguna::SATKER
+            ? $n->satker->where('id', $u->satker_id)
+            : $n->satker;
+
+        return $satker->map(fn ($s) => $s->namaPendek())->join(', ') ?: '—';
+    }
+
+    /**
+     * Satuan kerja hanya menerima kabar yang menyebut satuan kerjanya. Admin
+     * membaca apa yang dibaca Setba.
+     */
+    private static function kueri(User $u)
+    {
+        $peran = $u->peran === PeranPengguna::ADMIN ? PeranPengguna::SETBA : $u->peran;
+
+        return Notifikasi::query()
+            ->whereJsonContains('untuk_peran', $peran->value)
+            ->when($u->peran === PeranPengguna::SATKER,
+                fn ($q) => $q->whereHas('satker', fn ($s) => $s->where('satkers.id', $u->satker_id)));
     }
 }

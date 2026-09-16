@@ -19,25 +19,28 @@ class Temuan extends Model
        keduanya memang bisa berbeda.
 
        Jamak, bukan tunggal: satu temuan lazim mengenai beberapa satuan kerja
-       sekaligus. Selama ia tunggal, satu temuan harus dipecah jadi beberapa
-       baris supaya bisa menyebut semuanya — dan sesudah dipecah, nilai
-       temuannya ikut terhitung berkali-kali. */
-    public function satkers()        { return $this->belongsToMany(Satker::class, 'temuan_satker'); }
-
-    /** Satu nama untuk kolom sempit. Yang lain tetap terbaca di rinciannya. */
-    public function satkerPertama(): ?Satker
-    {
-        return $this->satkers->first();
-    }
+       sekaligus. Urutannya urutan pencatatan, sama dengan di suratnya. */
+    public function satkers()        { return $this->belongsToMany(Satker::class, 'temuan_satker')->orderBy('temuan_satker.id'); }
 
     /** Apakah temuan ini terjadi di satuan kerja tertentu. */
     public function mengenai(?int $satkerId): bool
     {
         return $satkerId !== null && $this->satkers->contains('id', $satkerId);
     }
-    public function rekomendasi()    { return $this->hasMany(Rekomendasi::class); }
+
+    public function rekomendasi()    { return $this->hasMany(Rekomendasi::class)->orderBy('nomor_urut')->orderBy('id'); }
     public function kategori()       { return $this->belongsTo(KategoriTemuan::class, 'kategori_temuan_id'); }
     public function kategoriIntern() { return $this->belongsTo(Referensi::class, 'kategori_intern_id'); }
+
+    /**
+     * Nilai temuan: yang tertulis di suratnya, atau — kalau kosong — jumlah
+     * tagihan rekomendasinya. Isian nilai temuan sudah dihapus dari formulir,
+     * jadi membaca medannya mentah membuat rekap berbunyi Rp 0.
+     */
+    public function nilaiTemuan(): int
+    {
+        return (int) $this->nilai ?: (int) $this->rekomendasi->sum('nilai_pulih');
+    }
 
     /* Sama seperti laporan — disimpulkan, tidak disimpan. */
     public function statusSimpulan(): StatusTindakLanjut

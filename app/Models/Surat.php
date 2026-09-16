@@ -5,22 +5,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Surat pengantar antar unit.
- *
- * Berkas tidak berpindah begitu saja. Setba mengantar ke UKI dengan surat
- * bernomor, UKI mengembalikan dengan surat, Setba meneruskan ke Inspektorat
- * dengan surat lagi. Nomornya dipakai menelusuri berkas di luar sistem -
- * kalau ada yang menanyakan lewat telepon, nomor surat itulah yang disebut.
- *
- * tanggal adalah tanggal pada suratnya; tanggal_catat kapan ia dimasukkan ke
- * sistem. Keduanya kerap berbeda, dan yang dipakai menghitung adalah yang
- * pertama.
+ * Surat pengantar Setba saat meneruskan berkas satu baris penugasan: ke UKI
+ * untuk validasi, ke Inspektorat untuk verifikasi.
  */
 class Surat extends Model
 {
     protected $fillable = [
         'rekomendasi_id', 'sasaran_id', 'dari', 'ke', 'nomor',
-        'tanggal', 'tanggal_catat', 'perihal', 'catatan',
+        'tanggal', 'tanggal_catat', 'perihal', 'catatan', 'tautan',
         'lampiran_id', 'dicatat_oleh',
     ];
 

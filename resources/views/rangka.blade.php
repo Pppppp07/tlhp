@@ -3,180 +3,169 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>@yield('judul', 'Monitoring TLHP')</title>
-  <link rel="stylesheet" href="{{ asset('css/simtlhp.css') }}">
-  {{-- Aset statis biasa, tanpa langkah build. Aplikasi yang butuh build akan
-       tampil tanpa gaya sama sekali kalau ada yang memasangnya tanpa
-       menjalankan build lebih dulu — dan gagalnya diam-diam. --}}
-  <script src="{{ asset('js/simtlhp.js') }}" defer></script>
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>@yield('judul', 'Monitoring TLHP') · SETBA</title>
+  {{-- Aset statis biasa, tanpa langkah build. simtlhp.css disalin dari
+       prototipe; yang khusus Laravel ada di simtlhp-tambahan.css. --}}
+  <link rel="stylesheet" href="{{ asset('css/simtlhp.css') }}?v={{ filemtime(public_path('css/simtlhp.css')) }}">
+  <link rel="stylesheet" href="{{ asset('css/simtlhp-tambahan.css') }}?v={{ filemtime(public_path('css/simtlhp-tambahan.css')) }}">
+  <script src="{{ asset('js/simtlhp.js') }}?v={{ filemtime(public_path('js/simtlhp.js')) }}" defer></script>
 </head>
 <body>
+@use('App\Enums\PeranPengguna', 'P')
 @auth
   @php
     $u = auth()->user();
     $peran = $u->peran;
-    /* Antrean dibaca lewat sasaran: penugasan tidak lagi tersimpan di
-       rekomendasi, dan satuan kerja hanya menghitung barisnya sendiri. */
-    $antre = \App\Models\Rekomendasi::diMeja($peran)
-        ->when($peran === \App\Enums\PeranPengguna::SATKER,
-               fn ($q) => $q->whereHas('sasaran',
-                   fn ($s) => $s->where('sasarans.satker_id', $u->satker_id)))
-        ->count();
+    $bingkai = \App\Support\Rangka::untuk($u);
+    $akun = \App\Support\Rangka::pengguna($u);
+
+    /* Menu datar tanpa kelompok, sama dengan prototipe. Butir yang tidak
+       berlaku bagi sebuah peran dihilangkan, bukan diganti nama lain. */
+    $menu = [
+      /* Halaman rincian tidak menyalakan menu mana pun, sama seperti
+         prototipe: yang menyala hanya layar yang memang butir menu. */
+      ['rute' => 'rekomendasi.index', 'aktif' => ['rekomendasi.index'], 'ikon' => 'FileText', 'nama' => 'Rekomendasi', 'tanda' => $bingkai['perluKerja']],
+      ['rute' => 'laporan.index', 'aktif' => ['laporan.index'], 'ikon' => 'Files', 'nama' => 'Daftar laporan'],
+    ];
+    if (in_array($peran, [P::SETBA, P::PIMPINAN, P::ADMIN], true)) {
+      $menu[] = ['rute' => 'ringkasan', 'aktif' => ['ringkasan'], 'ikon' => 'LayoutGrid', 'nama' => 'Ringkasan'];
+    }
+    if (in_array($peran, [P::SETBA, P::ADMIN], true)) {
+      $menu[] = ['rute' => 'master', 'aktif' => ['master*'], 'ikon' => 'ListChecks', 'nama' => 'Data master'];
+    }
+    $menu[] = ['rute' => 'kabar', 'aktif' => ['kabar'], 'ikon' => 'Bell', 'nama' => 'Pemberitahuan', 'tanda' => $bingkai['belumDibaca']];
   @endphp
+
+  {{-- Batang atas hanya muncul di layar sempit — pembuka laci navigasi. --}}
+  <div class="nav-atas">
+    <button class="buka-nav" type="button" data-buka-nav aria-label="Buka menu"><x-ikon n="Menu" :s="18" /></button>
+    <b>@yield('judul')</b>
+  </div>
+  <div class="tirai-nav" data-tutup-nav></div>
+
   <nav class="nav">
     <div class="brand">
       <span class="lambang">SB</span>
-      <span>
+      <span class="teks">
         <b>SETBA</b>
         <span>Sistem Tindak Lanjut<br>Hasil Pemeriksaan</span>
       </span>
     </div>
 
-    {{-- Menu datar tanpa kelompok, seperti prototipe. Sesudah layar
-         Rekomendasi punya keranjangnya sendiri, menunya jadi cukup pendek
-         untuk dibaca sekali lihat - dan daftar sependek ini tidak perlu
-         dikelompokkan; judul kelompok justru memanjangkannya. --}}
-
-    {{-- Slot yang sama untuk semua peran, cakupan yang berbeda. Penyaringnya
-         sudah dikerjakan Terlihat, jadi satuan kerja membuka layar yang sama
-         dan hanya melihat berkasnya sendiri. --}}
-    <a class="item" href="{{ route('rekomendasi.index') }}"
-       @if(request()->routeIs('rekomendasi.index')) aria-current="page" @endif>
-      <x-ik nama="berkas-teks" ukuran="17" />
-      <span class="tulisan">Rekomendasi</span>
-      @if($antre)<span class="tanda">{{ $antre }}</span>@endif
-    </a>
-
-    <a class="item" href="{{ route('laporan.index') }}"
-       @if(request()->routeIs('laporan.index') || request()->routeIs('laporan.show')) aria-current="page" @endif>
-      <x-ik nama="tumpuk" ukuran="17" />
-      <span class="tulisan">Daftar laporan</span>
-    </a>
-
-    @if($peran === \App\Enums\PeranPengguna::SETBA)
-      @php
-        $perluSiptl = \App\Models\Rekomendasi::whereIn('posisi', [
-            \App\Enums\PosisiBerkas::SIPTL->value,
-            \App\Enums\PosisiBerkas::BPK->value,
-        ])->count();
-      @endphp
-
-      {{-- Urusan SIPTL memang milik Setba: mengunggah lalu menyalin status
-           BPK. CHV tidak — itu urusan Inspektorat, dan terbit dari panel
-           verifikasinya sendiri. --}}
-      <a class="item" href="{{ route('siptl') }}"
-         @if(request()->routeIs('siptl')) aria-current="page" @endif>
-        <x-ik nama="dompet" ukuran="17" />
-        <span class="tulisan">Urusan SIPTL</span>
-        @if($perluSiptl)<span class="tanda">{{ $perluSiptl }}</span>@endif
+    @foreach($menu as $m)
+      <a class="menu" href="{{ route($m['rute']) }}" title="{{ $m['nama'] }}"
+        @if(request()->routeIs(...$m['aktif'])) aria-current="page" @endif>
+        <x-ikon :n="$m['ikon']" :s="17" />
+        <span class="tulisan">{{ $m['nama'] }}</span>
+        @if(($m['tanda'] ?? 0) > 0)<span class="n">{{ $m['tanda'] }}</span>@endif
       </a>
-    @endif
+    @endforeach
 
-    @if($peran === \App\Enums\PeranPengguna::UKI)
-      @php $antreLhv = \App\Models\Sasaran::where('posisi',
-          \App\Enums\PosisiBerkas::UKI->value)->count(); @endphp
-      <a class="item" href="{{ route('validasi.form') }}"
-         @if(request()->routeIs('validasi.*')) aria-current="page" @endif>
-        <x-ik nama="papan-cek" ukuran="17" />
-        <span class="tulisan">Terbitkan LHV</span>
-        @if($antreLhv)<span class="tanda">{{ $antreLhv }}</span>@endif
-      </a>
-    @endif
+    {{-- Di prototipe ini pemilih peran. Di sini akunnya sudah menentukan
+         peran dan satuan kerjanya; yang tersisa menyebutnya dan keluar. --}}
+    <div class="peran">
+      <div class="lbl"><x-ikon n="Users" :s="12" /> Masuk sebagai</div>
+      <div class="akunmasuk">
+        <b>{{ $akun['peran'] }}</b>
+        @if($peran === P::SATKER)
+          <span><x-ikon n="Building2" :s="11" /> {{ $u->satker?->namaPendek() }}</span>
+        @endif
+        <form method="post" action="{{ route('keluar') }}">@csrf<button type="submit" class="btn btn-s">Keluar</button></form>
+      </div>
+    </div>
 
-    @if(in_array($peran, [\App\Enums\PeranPengguna::SETBA, \App\Enums\PeranPengguna::PIMPINAN,
-                          \App\Enums\PeranPengguna::ADMIN], true))
-      <a class="item" href="{{ route('ringkasan') }}"
-         @if(request()->routeIs('ringkasan')) aria-current="page" @endif>
-        <x-ik nama="kotak-empat" ukuran="17" />
-        <span class="tulisan">Ringkasan</span>
-      </a>
-    @endif
-
-    {{-- Data master berdiri paling bawah di antara menu tempat: ia jarang
-         dibuka, dan yang membukanya sedang menyetel sistemnya, bukan
-         mengerjakan berkas. --}}
-    @if(in_array($peran, [\App\Enums\PeranPengguna::SETBA,
-                          \App\Enums\PeranPengguna::ADMIN], true))
-      <a class="item" href="{{ route('master') }}"
-         @if(request()->routeIs('master')) aria-current="page" @endif>
-        <x-ik nama="petak" ukuran="17" />
-        <span class="tulisan">Data master</span>
-      </a>
-    @endif
-
-    @php
-      $kabarBaru = \App\Support\Kabar::belumDibaca($u);
-      /* Kabar terbaru yang belum dibaca, dititipkan ke skrip lewat atribut
-         data. Tidak ada permintaan tambahan ke peladen: datanya sudah ada di
-         tangan saat halaman ini disusun. */
-      $kabarPuncak = $kabarBaru
-        ? \App\Support\Kabar::untuk($u)->first(fn ($k) => ! $k->dibaca->contains('id', $u->id))
-        : null;
-    @endphp
-    <a class="item" href="{{ route('kabar') }}"
-       @if(request()->routeIs('kabar')) aria-current="page" @endif>
-      <x-ik nama="lonceng" ukuran="17" />
-      <span class="tulisan">Pemberitahuan</span>
-      @if($kabarBaru)<span class="tanda genting">{{ $kabarBaru }}</span>@endif
-    </a>
-
-    <div class="kaki">
-      <div class="nm">{{ $u->name }}</div>
-      <div class="pr">{{ $peran->nama() }}@if($u->satker && $u->satker->namaPendek() !== $peran->nama()) &middot; {{ $u->satker->namaPendek() }}@endif</div>
-      <form method="post" action="{{ route('keluar') }}">@csrf<button type="submit">Keluar</button></form>
+    <div class="bantuan">
+      <div class="isi">
+        <span class="ic-kotak" title="Panduan"><x-ikon n="HelpCircle" :s="17" /></span>
+        <span>
+          <b>Butuh bantuan?</b>
+          <span>Panduan penggunaan sistem</span>
+          <a href="#panduan">Buka panduan <x-ikon n="ExternalLink" :s="11" /></a>
+        </span>
+      </div>
     </div>
   </nav>
 
-  @if($kabarPuncak)
-    <span id="kabar-baru" hidden
-      data-jumlah="{{ $kabarBaru }}"
-      data-tanda="{{ $kabarPuncak->id }}"
-      data-pelaku="{{ $kabarPuncak->label_pelaku }}"
-      data-aksi="{{ \Illuminate\Support\Str::limit($kabarPuncak->aksi, 110) }}"
-      data-judul="{{ $kabarPuncak->rekomendasi?->kode }} &middot; {{ \Illuminate\Support\Str::limit($kabarPuncak->rekomendasi?->temuan->judul ?? '', 60) }}"
-      data-tautan="{{ route('kabar') }}"></span>
-  @endif
+  <div class="main">
+    <header class="top">
+      <h1>@yield('judul')</h1>
 
-  <div class="utama">
-    <header class="atas">
-      <h1>@yield('judul', 'Beranda')</h1>
-      {{-- Di batang atas, bukan di satu halaman saja: berkas dicari dari mana
-           pun orang sedang berada, bukan hanya saat kebetulan sudah membuka
-           daftar rekomendasi. --}}
-      <form method="get" action="{{ route('rekomendasi.index') }}" class="cari-atas">
-        <input type="search" name="cari" value="{{ request('cari') }}"
-          placeholder="Cari kode, nomor surat, temuan, atau satuan kerja"
-          aria-label="Cari berkas">
-        <button class="btn btn-s" type="submit">Cari</button>
-      </form>
+      {{-- Hasilnya diambil dari rute yang sudah disaring hak aksesnya. --}}
+      <div class="cari-glob" data-cari-glob data-sumber="{{ route('cari') }}">
+        <span class="kotak">
+          <x-ikon n="Search" :s="15" />
+          <input type="text" placeholder="Cari kode, temuan, atau satuan kerja" aria-label="Cari" autocomplete="off">
+          <kbd>/</kbd>
+          <button class="bersih" type="button" aria-label="Kosongkan pencarian" hidden><x-ikon n="X" :s="13" /></button>
+        </span>
+        <div class="panel" hidden></div>
+      </div>
 
       <div class="alat">
-        {{-- Tersedia di halaman mana pun Setba berada — surat bisa datang kapan
-             saja, dan memaksa kembali ke satu halaman dulu hanya menunda. --}}
-        @if($peran === \App\Enums\PeranPengguna::SETBA)
-          {{-- Disembunyikan saat formnya sendiri sedang dibuka: tombol yang
-               menuju halaman yang sedang dilihat cuma menambah keraguan. --}}
-          @unless(request()->routeIs('laporan.baru*'))
-            <a class="btn btn-p" href="{{ route('laporan.baru') }}">+ Catat laporan baru</a>
-          @endunless
+        @if($peran === P::SETBA && ! request()->routeIs('laporan.baru'))
+          <a class="btn btn-p" href="{{ route('laporan.baru') }}">
+            @if($bingkai['drafLaporan'])
+              <x-ikon n="Save" :s="15" /> Lanjutkan draf laporan
+            @else
+              <x-ikon n="Plus" :s="15" /> Catat laporan baru
+            @endif
+          </a>
         @endif
-        <span class="lbl">{{ now()->translatedFormat('d M Y') }}</span>
-        <a class="lonceng" href="{{ route('kabar') }}" aria-label="Pemberitahuan, {{ $kabarBaru }} belum dibaca">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
-            <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
-          </svg>
-          @if($kabarBaru)<span class="n">{{ $kabarBaru }}</span>@endif
+        <span class="lbl" style="display:flex;align-items:center;gap:6px">
+          <x-ikon n="Clock" :s="13" /> {{ \App\Support\Tampil::tgl(now()) }}
+        </span>
+        <a class="lonceng" href="{{ route('kabar') }}" aria-label="Pemberitahuan, {{ $bingkai['belumDibaca'] }} belum dibaca">
+          <x-ikon n="Bell" :s="19" />
+          @if($bingkai['belumDibaca'] > 0)<span class="n">{{ $bingkai['belumDibaca'] }}</span>@endif
         </a>
+        <span class="pengguna">
+          <span class="rupa">{{ $akun['rupa'] }}</span>
+          <span class="teks">
+            <b>{{ $akun['nama'] }}</b>
+            <span>{{ $akun['ket'] }}</span>
+          </span>
+          <x-ikon n="ChevronDown" :s="15" style="color:var(--ink-3)" />
+        </span>
       </div>
     </header>
-    <div class="badan">
-      @if(session('pesan'))<div class="pesan">{{ session('pesan') }}</div>@endif
-      @if(session('gagal'))<div class="pesan bad">{{ session('gagal') }}</div>@endif
-      @yield('isi')
-    </div>
+
+    @if(session('pesan') || session('gagal') || $errors->any())
+      <div class="body pesanbingkai">
+        @if(session('pesan'))
+          <div class="pesan ok"><x-ikon n="Check" :s="16" /><span>{{ session('pesan') }}</span></div>
+        @endif
+        @if(session('gagal') || $errors->any())
+          <div class="pesan bad"><x-ikon n="AlertTriangle" :s="16" /><span>{{ session('gagal') ?? $errors->first() }}</span></div>
+        @endif
+      </div>
+    @endif
+
+    @yield('isi')
   </div>
+
+  @if($s = $bingkai['sembul'])
+    @php $k = $s['kabar']; @endphp
+    <div class="sembul" role="status" aria-live="polite" data-sembul>
+      <span class="lonceng-ikon"><x-ikon n="Bell" :s="15" /></span>
+      <div class="teks">
+        @if($s['jumlah'] === 1)
+          <div class="atas">
+            <x-sumber :j="$k->rekomendasi->jenis()" />
+            <span class="mono kd">{{ $k->rekomendasi->kode }}</span>
+          </div>
+          <div class="apa"><b>{{ $k->label_pelaku }}</b> &mdash; {{ $k->aksi }}</div>
+          <div class="lbl">{{ $k->rekomendasi->temuan->judul }} &middot; {{ \App\Support\Tampil::daftarPendek($k->satker) }}@if($k->tindakan) &middot; {{ $k->tindakan->namaBentuk() }}@endif</div>
+          <a class="taut" href="{{ route('kabar.buka', $k) }}">Buka <x-ikon n="ChevronRight" :s="13" /></a>
+        @else
+          <div class="apa"><b>{{ $s['jumlah'] }} kabar baru</b> menunggu dibaca</div>
+          <div class="lbl">Terbaru: {{ $k->label_pelaku }} &mdash; {{ $k->aksi }}</div>
+          <a class="taut" href="{{ route('kabar') }}">Lihat semua <x-ikon n="ChevronRight" :s="13" /></a>
+        @endif
+      </div>
+      <button class="tutup" type="button" aria-label="Tutup kabar" data-tutup-sembul><x-ikon n="X" :s="14" /></button>
+    </div>
+  @endif
 @else
   @yield('isi')
 @endauth

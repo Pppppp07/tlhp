@@ -21,6 +21,26 @@ enum StatusTindakLanjut: string
         };
     }
 
+    /**
+     * Sebutan pada lencana. "dengan rekomendasi" dibuang: lencananya sudah
+     * menempel pada rekomendasi itu sendiri, dan sepasang "Sudah sesuai" /
+     * "Belum sesuai" langsung terbaca sebagai lawan satu sama lain.
+     */
+    public function pendek(): string
+    {
+        return match ($this) {
+            self::BT => 'Belum ditindaklanjuti',
+            self::SS => 'Sudah sesuai',
+            self::BS => 'Belum sesuai',
+            self::TD => 'Tidak dapat ditindaklanjuti',
+        };
+    }
+
+    public function cap(): string
+    {
+        return 'cap-'.strtolower($this->value);
+    }
+
     /** TD wajib disertai alasan sah dari daftar baku. */
     public function perluAlasanSah(): bool
     {

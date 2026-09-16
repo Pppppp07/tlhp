@@ -5,17 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Suratnya sendiri. Satu surat bernomor dapat memuat keputusan untuk beberapa
- * rekomendasi sekaligus — itu kenyataan kertasnya.
+ * Surat hasil bernomor: LHV dari UKI, CHV dari Inspektorat.
  *
- * Dua jenis surat memakai tabel ini, dan cakupannya berbeda:
- *
- *   LHV  Laporan Hasil Validasi, dari UKI, atas berkas satu satuan kerja
- *   CHV  Catatan Hasil Verifikasi, dari Inspektorat, memutus SELURUH
- *        rekomendasi sekaligus
- *
- * Menyamakan keduanya membuat satu satuan kerja yang belum beres bisa
- * "menuntaskan" rekomendasi yang dipikul lima satuan kerja.
+ * Satu nomor boleh memutus beberapa baris dan beberapa rekomendasi — itu
+ * kenyataan kertasnya. Keputusan atas tiap rekomendasi ada di
+ * `KeputusanVerifikasi`.
  */
 class Verifikasi extends Model
 {
@@ -23,10 +17,11 @@ class Verifikasi extends Model
     public const CHV = 'CHV';
 
     protected $fillable = [
-        'jenis', 'periode', 'nomor_surat', 'tgl_surat', 'pejabat',
-        'lampiran_id', 'dicatat_oleh',
+        'jenis', 'periode', 'nomor_surat', 'tgl_surat', 'perihal', 'pejabat',
+        'nomor_lhv', 'tgl_lhv', 'lampiran_id', 'dicatat_oleh',
     ];
-    protected $casts = ['tgl_surat' => 'date'];
+
+    protected $casts = ['tgl_surat' => 'date', 'tgl_lhv' => 'date'];
 
     public function scopeChv($q) { return $q->where('jenis', self::CHV); }
     public function scopeLhv($q) { return $q->where('jenis', self::LHV); }

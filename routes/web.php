@@ -1,16 +1,16 @@
 <?php
 
 use App\Http\Controllers\BerkasController;
+use App\Http\Controllers\CariController;
+use App\Http\Controllers\DataMasterController;
 use App\Http\Controllers\KabarController;
 use App\Http\Controllers\LaporanBaruController;
 use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\MasukController;
 use App\Http\Controllers\RekomendasiController;
-use App\Http\Controllers\RiwayatController;
-use App\Http\Controllers\SasaranController;
-use App\Http\Controllers\DataMasterController;
 use App\Http\Controllers\RingkasanController;
-use App\Http\Controllers\SuratController;
+use App\Http\Controllers\SasaranController;
+use App\Http\Controllers\SiptlController;
 use App\Http\Controllers\TanggapanController;
 use Illuminate\Support\Facades\Route;
 
@@ -19,75 +19,50 @@ Route::post('/masuk', [MasukController::class, 'masuk'])->middleware('guest');
 Route::post('/keluar', [MasukController::class, 'keluar'])->name('keluar');
 
 Route::middleware('auth')->group(function () {
-    /* Tidak ada layar beranda. Prototipe tidak punya, dan memang tidak
-       perlu: daftar rekomendasi sudah menjawab "apa yang harus saya kerjakan"
-       lewat keranjangnya sendiri. Layar beranda cuma mengulangnya dengan
-       bentuk lain, lalu dua tempat itu perlahan berbeda. */
-    Route::redirect('/', '/rekomendasi')->name('beranda');
+    /* Layar awal mengikuti perannya, sama seperti prototipe: Pimpinan
+       mendarat di Ringkasan (berandanya), yang lain di Rekomendasi. */
+    Route::get('/', [RekomendasiController::class, 'beranda'])->name('beranda');
 
     Route::get('/rekomendasi', [RekomendasiController::class, 'index'])->name('rekomendasi.index');
     Route::get('/rekomendasi/{rekomendasi}', [RekomendasiController::class, 'show'])->name('rekomendasi.show');
-    /* Gerak tingkat 1 bekerja pada SASARAN, bukan rekomendasi. Rekomendasi
-       yang dipikul tiga satuan kerja berada di tiga tahap sekaligus; satu rute
-       ber-{rekomendasi} akan memindahkan berkas dua satker yang belum selesai. */
-    Route::post('/sasaran/{sasaran}/teruskan', [SasaranController::class, 'teruskan'])->name('sasaran.teruskan');
-    Route::post('/sasaran/{sasaran}/kembalikan', [SasaranController::class, 'kembalikan'])->name('sasaran.kembalikan');
-    Route::post('/sasaran/{sasaran}/telaah', [SasaranController::class, 'telaah'])->name('sasaran.telaah');
-    Route::post('/sasaran/{sasaran}/minta-dokumen', [SasaranController::class, 'mintaDokumen'])->name('sasaran.minta');
-    Route::post('/sasaran/{sasaran}/tanggapan', [TanggapanController::class, 'simpan'])->name('tanggapan.simpan');
 
-    /* Satu-satunya jalan mengubah kiriman yang sudah lepas dari meja satuan
-       kerja. Penjaganya ada di pengendalinya, bukan di sini: siapa boleh
-       mengajukan bergantung pada posisi berkasnya, bukan cuma pada perannya. */
-    Route::post('/sasaran/{sasaran}/minta-ubah',
-        [\App\Http\Controllers\PermintaanUbahController::class, 'ajukan'])->name('ubah.ajukan');
-    Route::post('/permintaan-ubah/{permintaan}/putus',
-        [\App\Http\Controllers\PermintaanUbahController::class, 'putus'])->name('ubah.putus');
+    /* Semua gerak berkas bekerja pada SASARAN — satu satuan kerja pada satu
+       bentuk tindak lanjut. Rekomendasi tidak menempuh proses apa pun. */
+    Route::post('/sasaran/{sasaran}/tanggapan', [TanggapanController::class, 'simpan'])->name('tanggapan.simpan');
+    Route::post('/sasaran/{sasaran}/teruskan', [SasaranController::class, 'teruskan'])->name('sasaran.teruskan');
+    Route::post('/sasaran/{sasaran}/putus', [SasaranController::class, 'putus'])->name('sasaran.putus');
+    Route::post('/sasaran/{sasaran}/kirim-ulang', [SasaranController::class, 'kirimUlang'])->name('sasaran.kirimUlang');
+
+    /* Urusan SIPTL milik Setba, per satuan kerja. */
+    Route::post('/sasaran/{sasaran}/siptl/unggah', [SiptlController::class, 'unggah'])->name('siptl.unggah');
+    Route::post('/sasaran/{sasaran}/siptl/status', [SiptlController::class, 'status'])->name('siptl.status');
+    Route::post('/rekomendasi/{rekomendasi}/ulang-bpk', [SiptlController::class, 'ulangBpk'])->name('siptl.ulangBpk');
 
     /* Ditaruh sebelum rute {laporan}, kalau tidak 'baru' terbaca sebagai
        nomor laporan dan halamannya tidak pernah terbuka. */
     Route::get('/laporan/baru', [LaporanBaruController::class, 'form'])->name('laporan.baru');
-    Route::post('/laporan/baru/surat', [LaporanBaruController::class, 'surat'])->name('laporan.baru.surat');
-    Route::post('/laporan/baru/temuan', [LaporanBaruController::class, 'temuan'])->name('laporan.baru.temuan');
-    Route::post('/laporan/baru/langkah/{langkah}', [LaporanBaruController::class, 'keLangkah'])->name('laporan.baru.langkah');
-    Route::post('/laporan/baru/ajukan', [LaporanBaruController::class, 'ajukan'])->name('laporan.baru.ajukan');
-    Route::post('/laporan/baru/batal', [LaporanBaruController::class, 'batal'])->name('laporan.baru.batal');
+    Route::post('/laporan/baru', [LaporanBaruController::class, 'simpan'])->name('laporan.baru.simpan');
+    Route::post('/laporan/baru/buang', [LaporanBaruController::class, 'buang'])->name('laporan.baru.buang');
 
     Route::get('/laporan', [LaporanController::class, 'index'])->name('laporan.index');
     Route::get('/laporan/{laporan}', [LaporanController::class, 'show'])->name('laporan.show');
 
-    /* Tidak ada layar "Catat surat CHV" untuk Setba. Peta tindakan
-       prototipe menyebutnya apa adanya: yang Setba kerjakan adalah meneruskan
-       berkas, mengunggah ke SIPTL, dan menyalin status BPK. Surat CHV terbit
-       dari panel verifikasi Inspektorat, dan hanya di sana. */
-    Route::post('/rekomendasi/{rekomendasi}/siptl', [SuratController::class, 'siptl'])->name('rekomendasi.siptl');
-    Route::post('/rekomendasi/{rekomendasi}/bpk', [SuratController::class, 'bpk'])->name('rekomendasi.bpk');
-
-    /* Seluruh urusan SIPTL di satu layar: mengunggah dan mencatat statusnya
-       adalah dua pekerjaan yang selalu berurutan dan selalu borongan. */
-    Route::get('/siptl', \App\Http\Controllers\SiptlController::class)->name('siptl');
-
-    /* UKI menerbitkan LHV bernomor. Satu surat memuat beberapa berkas
-       sekaligus, sama seperti CHV — bedanya cakupannya: LHV memvalidasi berkas
-       tiap satuan kerja, CHV memutus seluruh rekomendasi. */
-    Route::get('/validasi', [\App\Http\Controllers\ValidasiController::class, 'form'])->name('validasi.form');
-    Route::post('/validasi', [\App\Http\Controllers\ValidasiController::class, 'simpan'])->name('validasi.simpan');
-
-    Route::get('/rekomendasi-saya', [RiwayatController::class, 'saya'])->name('riwayatku');
-    Route::get('/sudah-selesai', [RiwayatController::class, 'selesai'])->name('selesai');
-
     Route::get('/kabar', [KabarController::class, 'index'])->name('kabar');
-    Route::post('/kabar/{notifikasi}/buka', [KabarController::class, 'buka'])->name('kabar.buka');
     Route::post('/kabar/semua', [KabarController::class, 'tandaiSemua'])->name('kabar.semua');
+    Route::get('/kabar/{notifikasi}', [KabarController::class, 'buka'])->name('kabar.buka');
 
     Route::get('/ringkasan', RingkasanController::class)->name('ringkasan');
 
-    /* Data master — daftar pilihan yang boleh berubah mengikuti peraturan.
-       Penjaganya di pengendalinya: yang boleh cuma Setba dan Admin, dan yang
-       bisa disunting cuma daftar yang memang milik kita sendiri. */
+    /* Pencarian di batang atas: rekomendasi dan laporan yang boleh dilihat. */
+    Route::get('/cari', CariController::class)->name('cari');
+
     Route::get('/data-master', [DataMasterController::class, 'index'])->name('master');
-    Route::post('/data-master/tambah', [DataMasterController::class, 'tambah'])->name('master.tambah');
-    Route::post('/data-master/{referensi}', [DataMasterController::class, 'simpan'])->name('master.simpan');
-    Route::post('/data-master/{referensi}/saklar', [DataMasterController::class, 'saklar'])->name('master.saklar');
+    Route::post('/data-master/kategori', [DataMasterController::class, 'tambah'])->name('master.tambah');
+    Route::post('/data-master/kategori/{referensi}', [DataMasterController::class, 'simpan'])->name('master.simpan');
+    Route::post('/data-master/kategori/{referensi}/saklar', [DataMasterController::class, 'saklar'])->name('master.saklar');
+    Route::post('/data-master/temuan', [DataMasterController::class, 'tambahTemuan'])->name('master.temuan.tambah');
+    Route::post('/data-master/temuan/{kategori}', [DataMasterController::class, 'simpanTemuan'])->name('master.temuan.simpan');
+    Route::post('/data-master/temuan/{kategori}/saklar', [DataMasterController::class, 'saklarTemuan'])->name('master.temuan.saklar');
+
     Route::get('/berkas/{lampiran}', [BerkasController::class, 'show'])->name('berkas.show');
 });

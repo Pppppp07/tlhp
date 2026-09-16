@@ -9,7 +9,7 @@ class Satker extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['kode', 'nama', 'provinsi', 'jenis', 'aktif'];
+    protected $fillable = ['kode', 'nama', 'nama_pendek', 'provinsi', 'jenis', 'aktif'];
     protected $casts = ['aktif' => 'boolean'];
 
     /** Baris penugasan yang jadi tanggungannya. Inilah pintu satu-satunya
@@ -30,9 +30,12 @@ class Satker extends Model
         return $this->hasMany(User::class);
     }
 
-    /** Nama pendek untuk daftar dan kartu. */
+    /**
+     * Nama pendek untuk layar. Nama panjangnya dipakai di surat; singkatannya
+     * mengikuti yang memang sudah dipakai di lembar pemantauan mereka.
+     */
     public function namaPendek(): string
     {
-        return str_replace('Balai Pengembangan Kompetensi PU ', 'Balai ', $this->nama);
+        return $this->nama_pendek ?: $this->nama;
     }
 }
